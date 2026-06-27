@@ -1,6 +1,7 @@
+import * as Linking from 'expo-linking';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
@@ -17,6 +18,7 @@ import {
   getFolderPath,
   listFolders,
   renameFolder,
+  shareFolder,
 } from '@/lib/folders';
 import { createDeck, deleteDeck, listDecks, setDeckPublic, updateDeck } from '@/lib/decks';
 import type { DeckWithCount, Folder } from '@/lib/types';
@@ -69,32 +71,36 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
   }
 
   function promptCreate() {
-    Alert.alert('สร้างใหม่', 'อยากสร้างอะไร?', [
-      { text: 'โฟลเดอร์', onPress: () => setModal({ kind: 'folder-create' }) },
-      { text: 'เด็ค', onPress: () => setModal({ kind: 'deck-create' }) },
-      { text: 'ยกเลิก', style: 'cancel' },
+    Alert.alert('Create new', 'What would you like to create?', [
+      { text: 'Folder', onPress: () => setModal({ kind: 'folder-create' }) },
+      { text: 'Deck', onPress: () => setModal({ kind: 'deck-create' }) },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
   function confirmDeleteFolder(folder: Folder) {
-    Alert.alert(`ลบ "${folder.name}"?`, 'โฟลเดอร์ย่อย เด็ค และการ์ดทั้งหมดข้างในจะถูกลบด้วย', [
-      { text: 'ยกเลิก', style: 'cancel' },
-      {
-        text: 'ลบ',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteFolder(folder.id);
-          load();
+    Alert.alert(
+      `Delete "${folder.name}"?`,
+      'All subfolders, decks, and cards inside will be deleted too.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteFolder(folder.id);
+            load();
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   function confirmDeleteDeck(deck: DeckWithCount) {
-    Alert.alert(`ลบเด็ค "${deck.title}"?`, 'การ์ดทั้งหมดในเด็คนี้จะถูกลบด้วย', [
-      { text: 'ยกเลิก', style: 'cancel' },
+    Alert.alert(`Delete deck "${deck.title}"?`, 'All cards in this deck will be deleted too.', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'ลบ',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           await deleteDeck(deck.id);
@@ -104,26 +110,57 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
     ]);
   }
 
+  async function handleShareFolder(folder: Folder) {
+    const next = !folder.isPublic;
+    try {
+      await shareFolder(folder.id, next);
+      if (next) {
+        const url = Linking.createURL(`/folder-preview/${folder.id}`);
+        await Share.share({ message: `Study "${folder.name}" with me on Flashcard Hero!\n${url}` });
+      }
+      load();
+    } catch (e) {
+      Alert.alert('Update failed', e instanceof Error ? e.message : 'Please try again');
+    }
+  }
+
   function folderMenu(folder: Folder) {
-    Alert.alert(folder.name, undefined, [
-      { text: 'เปลี่ยนชื่อ', onPress: () => setModal({ kind: 'folder-rename', folder }) },
-      { text: 'ลบ', style: 'destructive', onPress: () => confirmDeleteFolder(folder) },
-      { text: 'ยกเลิก', style: 'cancel' },
+    Alert.alert(folder.name, folder.isPublic ? 'Status: Public' : 'Status: Private', [
+      { text: 'Rename', onPress: () => setModal({ kind: 'folder-rename', folder }) },
+      {
+        text: folder.isPublic ? 'Unpublish folder' : 'Publish folder',
+        onPress: () => handleShareFolder(folder),
+      },
+      ...(folder.isPublic
+        ? [
+            {
+              text: 'Share folder link',
+              onPress: async () => {
+                const url = Linking.createURL(`/folder-preview/${folder.id}`);
+                await Share.share({
+                  message: `Study "${folder.name}" with me on Flashcard Hero!\n${url}`,
+                });
+              },
+            },
+          ]
+        : []),
+      { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteFolder(folder) },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
   function deckMenu(deck: DeckWithCount) {
-    Alert.alert(deck.title, deck.isPublic ? 'สถานะ: เผยแพร่' : 'สถานะ: ส่วนตัว', [
-      { text: 'แก้ไขรายละเอียด', onPress: () => setModal({ kind: 'deck-edit', deck }) },
+    Alert.alert(deck.title, deck.isPublic ? 'Status: Public' : 'Status: Private', [
+      { text: 'Edit details', onPress: () => setModal({ kind: 'deck-edit', deck }) },
       {
-        text: deck.isPublic ? 'เลิกเผยแพร่' : 'เผยแพร่สู่สาธารณะ',
+        text: deck.isPublic ? 'Unpublish' : 'Publish',
         onPress: async () => {
           await setDeckPublic(deck.id, !deck.isPublic);
           load();
         },
       },
-      { text: 'ลบ', style: 'destructive', onPress: () => confirmDeleteDeck(deck) },
-      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteDeck(deck) },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
@@ -145,15 +182,15 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {path.length > 0 ? (
         <ThemedText numberOfLines={1} style={[styles.breadcrumb, { color: theme.muted }]}>
-          {['คลังของฉัน', ...path.map((f) => f.name)].join('  ›  ')}
+          {['Library', ...path.map((f) => f.name)].join('  ›  ')}
         </ThemedText>
       ) : null}
 
       {isEmpty ? (
         <EmptyState
           icon="folder-open"
-          title="ยังว่างอยู่"
-          message="แตะปุ่ม + เพื่อสร้างโฟลเดอร์หรือเด็คแรกของคุณ"
+          title="Nothing here yet"
+          message="Tap + to create your first folder or deck"
         />
       ) : (
         <ScrollView
@@ -165,6 +202,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
               key={`folder-${folder.id}`}
               icon="folder"
               title={folder.name}
+              rightText={folder.isPublic ? '🌐' : undefined}
               onPress={() => router.push(`/folder/${folder.id}`)}
               onMorePress={() => folderMenu(folder)}
             />
@@ -176,7 +214,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
               iconColor={theme.success}
               title={deck.title}
               subtitle={deck.description ?? undefined}
-              rightText={`${deck.cardCount} ใบ${deck.isPublic ? ' · 🌐' : ''}`}
+              rightText={`${deck.cardCount} cards${deck.isPublic ? ' · 🌐' : ''}`}
               onPress={() => router.push(`/deck/${deck.id}`)}
               onMorePress={() => deckMenu(deck)}
             />
@@ -188,7 +226,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
 
       <FormModal
         visible={modal.kind === 'folder-create'}
-        title="โฟลเดอร์ใหม่"
+        title="New folder"
         fields={folderFields()}
         onSubmit={async (values) => {
           await createFolder(folderId, values.name);
@@ -199,7 +237,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       />
       <FormModal
         visible={modal.kind === 'folder-rename'}
-        title="เปลี่ยนชื่อโฟลเดอร์"
+        title="Rename folder"
         fields={folderFields(modal.kind === 'folder-rename' ? modal.folder.name : '')}
         onSubmit={async (values) => {
           if (modal.kind === 'folder-rename') {
@@ -212,7 +250,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       />
       <FormModal
         visible={modal.kind === 'deck-create'}
-        title="เด็คใหม่"
+        title="New deck"
         fields={deckFields()}
         onSubmit={async (values) => {
           await createDeck(folderId, values.title, values.description);
@@ -223,7 +261,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       />
       <FormModal
         visible={modal.kind === 'deck-edit'}
-        title="แก้ไขเด็ค"
+        title="Edit deck"
         fields={
           modal.kind === 'deck-edit'
             ? deckFields(modal.deck.title, modal.deck.description ?? '')
@@ -246,8 +284,8 @@ function folderFields(name = ''): FormField[] {
   return [
     {
       key: 'name',
-      label: 'ชื่อโฟลเดอร์',
-      placeholder: 'เช่น ภาษาอังกฤษ',
+      label: 'Folder name',
+      placeholder: 'e.g. English',
       required: true,
       initialValue: name,
     },
@@ -258,15 +296,15 @@ function deckFields(title = '', description = ''): FormField[] {
   return [
     {
       key: 'title',
-      label: 'ชื่อเด็ค',
-      placeholder: 'เช่น คำศัพท์ Unit 1',
+      label: 'Deck title',
+      placeholder: 'e.g. Unit 1 Vocabulary',
       required: true,
       initialValue: title,
     },
     {
       key: 'description',
-      label: 'คำอธิบาย (ไม่บังคับ)',
-      placeholder: 'อธิบายสั้นๆ',
+      label: 'Description (optional)',
+      placeholder: 'Short description',
       multiline: true,
       initialValue: description,
     },

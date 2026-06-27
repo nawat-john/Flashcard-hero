@@ -1,6 +1,7 @@
-import { listCards } from '@/lib/cards';
+import * as store from '@/lib/store';
 import { supabase, unwrap } from '@/lib/supabase';
-import type { Card } from '@/lib/types';
+import { listCards } from '@/lib/cards';
+import type { Card, Review } from '@/lib/types';
 
 /**
  * Spaced repetition (a simplified SM-2) over the `card_reviews` table.
@@ -11,7 +12,7 @@ import type { Card } from '@/lib/types';
  *   - interval === 1              → seen once
  *   - interval >= 2              → graduated, interval grows by `ease`
  *
- * Grading is binary (the study UI's "จำได้ / จำไม่ได้"): remembered ≈ SM-2
+ * Grading is binary (the study UI's "Got it / Forgot"): remembered ≈ SM-2
  * quality 4 (ease unchanged), forgot resets the interval and lowers ease.
  */
 
@@ -49,40 +50,69 @@ function nextSchedule(
   return { interval, ease, dueDate: new Date(Date.now() + interval * DAY_MS).toISOString() };
 }
 
-/** Records one grade for a card and advances its schedule (upserts the review). */
+/** Records one grade for a card and advances its schedule. */
 export async function recordReview(cardId: string, remembered: boolean): Promise<void> {
-  const prev = unwrap(
-    await supabase.from('card_reviews').select('interval, ease').eq('card_id', cardId).maybeSingle()
-  );
+  await store.ensureLoaded();
+
+  // Read from mirror first (avoids a server round-trip when offline).
+  const cached = store.mReview(cardId);
+  let prev: { interval: number; ease: number } | null = cached ?? null;
+
+  if (!cached && store.isOnline()) {
+    try {
+      const row = unwrap(
+        await supabase
+          .from('card_reviews')
+          .select('interval, ease')
+          .eq('card_id', cardId)
+          .maybeSingle()
+      ) as ReviewRow | null;
+      if (row) prev = { interval: row.interval, ease: row.ease };
+    } catch {
+      // proceed with null prev — will treat as new card
+    }
+  }
+
   const { interval, ease, dueDate } = nextSchedule(prev, remembered);
   // user_id defaults to auth.uid() in the DB; RLS keeps each user's progress separate.
-  unwrap(
-    await supabase
-      .from('card_reviews')
-      .upsert(
-        { card_id: cardId, interval, ease, due_date: dueDate },
-        { onConflict: 'user_id,card_id' }
-      )
-  );
+  const review: Review = { cardId, interval, ease, dueDate };
+  await store.upsertReview(review);
 }
 
 /** Cards in a deck that are due now — never-reviewed cards count as due. */
 export async function getDueCards(deckId: string): Promise<Card[]> {
+  await store.ensureLoaded();
   const cards = await listCards(deckId);
   if (cards.length === 0) return [];
 
-  const reviews =
-    (unwrap(
-      await supabase
-        .from('card_reviews')
-        .select('card_id, due_date')
-        .in(
-          'card_id',
-          cards.map((c) => c.id)
-        )
-    ) as ReviewRow[] | null) ?? [];
+  let reviews: Review[] = store.mReviewsByCards(cards.map((c) => c.id));
 
-  const dueByCard = new Map(reviews.map((r) => [r.card_id, r.due_date]));
+  // If we're online and any card has no mirror review, fetch from server once.
+  if (store.isOnline()) {
+    try {
+      const rows =
+        (unwrap(
+          await supabase
+            .from('card_reviews')
+            .select('card_id, due_date, interval, ease')
+            .in(
+              'card_id',
+              cards.map((c) => c.id)
+            )
+        ) as ReviewRow[] | null) ?? [];
+      reviews = rows.map((r) => ({
+        cardId: r.card_id,
+        dueDate: r.due_date,
+        interval: r.interval,
+        ease: r.ease,
+      }));
+      store.cacheReviews(reviews);
+    } catch {
+      // fall through to mirror
+    }
+  }
+
+  const dueByCard = new Map(reviews.map((r) => [r.cardId, r.dueDate]));
   const now = Date.now();
   return cards.filter((card) => {
     if (!dueByCard.has(card.id)) return true; // new card

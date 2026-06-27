@@ -33,6 +33,7 @@ create table public.folders (
   owner_id   uuid not null default auth.uid() references auth.users on delete cascade,
   parent_id  uuid references public.folders(id) on delete cascade,
   name       text not null,
+  is_public  boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -67,6 +68,7 @@ create table public.card_reviews (
 );
 
 create index folders_owner_parent_idx on public.folders (owner_id, parent_id);
+create index folders_public_idx on public.folders (is_public) where is_public;
 create index decks_owner_folder_idx on public.decks (owner_id, folder_id);
 create index decks_public_idx on public.decks (is_public) where is_public;
 create index cards_deck_idx on public.cards (deck_id);
@@ -184,6 +186,136 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Phase 5: share / copy a WHOLE folder subtree
+--
+-- Same security model as the deck helpers: security invoker, so RLS decides
+-- what the caller can read/write. Sharing flips is_public on every folder and
+-- deck in the subtree; copying forks the whole subtree (folders + decks +
+-- cards) into the caller's library as private, independent copies.
+-- ---------------------------------------------------------------------------
+
+-- Publish/unpublish an entire folder subtree (the folders and all decks within).
+create or replace function public.share_folder(root uuid, make_public boolean)
+returns void
+language plpgsql
+security invoker
+as $$
+begin
+  -- Only the owner of the root may (un)share it.
+  if not exists (select 1 from public.folders f where f.id = root and f.owner_id = auth.uid()) then
+    raise exception 'folder not found or not owned by caller';
+  end if;
+
+  with recursive tree as (
+    select id from public.folders where id = root
+    union all
+    select f.id from public.folders f join tree t on f.parent_id = t.id
+  )
+  update public.folders f
+  set is_public = make_public
+  where f.id in (select id from tree);
+
+  with recursive tree as (
+    select id from public.folders where id = root
+    union all
+    select f.id from public.folders f join tree t on f.parent_id = t.id
+  )
+  update public.decks d
+  set is_public = make_public
+  where d.folder_id in (select id from tree);
+end;
+$$;
+
+-- Top-level public folders for the Discover tab, with creator name and a count
+-- of how many decks the subtree contains.
+create or replace function public.list_public_folders(search text default '')
+returns table (
+  id           uuid,
+  owner_id     uuid,
+  name         text,
+  created_at   timestamptz,
+  creator_name text,
+  deck_count   bigint
+)
+language sql
+stable
+as $$
+  select
+    f.id,
+    f.owner_id,
+    f.name,
+    f.created_at,
+    p.display_name as creator_name,
+    (
+      with recursive tree as (
+        select f.id
+        union all
+        select c.id from public.folders c join tree t on c.parent_id = t.id
+      )
+      select count(*) from public.decks d where d.folder_id in (select id from tree)
+    ) as deck_count
+  from public.folders f
+  left join public.profiles p on p.id = f.owner_id
+  where f.is_public
+    -- only show subtree roots: a public folder whose parent is not itself public
+    and not exists (
+      select 1 from public.folders parent
+      where parent.id = f.parent_id and parent.is_public
+    )
+    and (search = '' or f.name ilike '%' || search || '%')
+  order by f.created_at desc
+  limit 100;
+$$;
+
+-- Fork-on-copy for a whole folder subtree. Recursively duplicates the folder,
+-- its decks (+ cards), and every descendant folder into the caller's library as
+-- private copies. Study progress never carries over (new card ids). Returns the
+-- id of the new top-level folder copy.
+create or replace function public.copy_folder(source_folder_id uuid, target_parent_id uuid default null)
+returns uuid
+language plpgsql
+security invoker
+as $$
+declare
+  new_folder_id uuid;
+  child record;
+  src_deck record;
+  new_deck_id uuid;
+begin
+  insert into public.folders (owner_id, parent_id, name, is_public)
+  select auth.uid(), target_parent_id, f.name, false
+  from public.folders f
+  where f.id = source_folder_id
+  returning id into new_folder_id;
+
+  if new_folder_id is null then
+    raise exception 'folder not found or not accessible';
+  end if;
+
+  -- Copy the decks (and their cards) that live directly in this folder.
+  for src_deck in select id from public.decks where folder_id = source_folder_id loop
+    insert into public.decks (owner_id, folder_id, title, description, is_public)
+    select auth.uid(), new_folder_id, d.title, d.description, false
+    from public.decks d
+    where d.id = src_deck.id
+    returning id into new_deck_id;
+
+    insert into public.cards (deck_id, front, back, position)
+    select new_deck_id, c.front, c.back, c.position
+    from public.cards c
+    where c.deck_id = src_deck.id;
+  end loop;
+
+  -- Recurse into child folders.
+  for child in select id from public.folders where parent_id = source_folder_id loop
+    perform public.copy_folder(child.id, new_folder_id);
+  end loop;
+
+  return new_folder_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
 
@@ -200,9 +332,10 @@ create policy profiles_select_all on public.profiles
 create policy profiles_update_own on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 
--- folders: fully private to the owner.
-create policy folders_select_own on public.folders
-  for select using (auth.uid() = owner_id);
+-- folders: owner has full access; anyone may READ a folder flagged is_public
+-- (so a shared folder subtree can be previewed and copied — Phase 5 sharing).
+create policy folders_select_own_or_public on public.folders
+  for select using (auth.uid() = owner_id or is_public);
 create policy folders_insert_own on public.folders
   for insert with check (auth.uid() = owner_id);
 create policy folders_update_own on public.folders

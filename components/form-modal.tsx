@@ -41,7 +41,7 @@ export function FormModal({
   visible,
   title,
   fields,
-  submitLabel = 'บันทึก',
+  submitLabel = 'Save',
   onSubmit,
   onClose,
 }: FormModalProps) {
@@ -109,7 +109,7 @@ export function FormModal({
             ))}
           </ScrollView>
           <View style={styles.actions}>
-            <Button label="ยกเลิก" variant="secondary" onPress={onClose} style={styles.action} />
+            <Button label="Cancel" variant="secondary" onPress={onClose} style={styles.action} />
             <Button
               label={submitLabel}
               onPress={handleSubmit}

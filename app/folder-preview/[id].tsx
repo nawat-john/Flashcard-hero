@@ -7,21 +7,21 @@ import { ErrorState } from '@/components/error-state';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { listCards } from '@/lib/cards';
-import { copyDeck, getDeck } from '@/lib/decks';
+import { copyFolder, getFolder } from '@/lib/folders';
+import { listDecks } from '@/lib/decks';
 import { getProfile } from '@/lib/profiles';
-import type { Card, Deck } from '@/lib/types';
+import type { DeckWithCount, Folder } from '@/lib/types';
 
-export default function DeckPreviewScreen() {
+export default function FolderPreviewScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { id: deckId } = useLocalSearchParams<{ id: string }>();
+  const { id: folderId } = useLocalSearchParams<{ id: string }>();
 
-  const [deck, setDeck] = useState<Deck | null>(null);
+  const [folder, setFolder] = useState<Folder | null>(null);
+  const [decks, setDecks] = useState<DeckWithCount[]>([]);
   const [creator, setCreator] = useState<string | null>(null);
-  const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
@@ -29,16 +29,14 @@ export default function DeckPreviewScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const nextDeck = await getDeck(deckId);
-      if (!nextDeck) {
-        throw new Error('Deck not found or not public');
-      }
-      const [nextCards, profile] = await Promise.all([
-        listCards(deckId),
-        getProfile(nextDeck.ownerId),
+      const nextFolder = await getFolder(folderId);
+      if (!nextFolder) throw new Error('Folder not found or not public');
+      const [nextDecks, profile] = await Promise.all([
+        listDecks(folderId),
+        getProfile(nextFolder.ownerId),
       ]);
-      setDeck(nextDeck);
-      setCards(nextCards);
+      setFolder(nextFolder);
+      setDecks(nextDecks);
       setCreator(profile?.displayName ?? null);
       setError(null);
     } catch (e) {
@@ -46,7 +44,7 @@ export default function DeckPreviewScreen() {
     } finally {
       setLoading(false);
     }
-  }, [deckId]);
+  }, [folderId]);
 
   useEffect(() => {
     load();
@@ -56,9 +54,9 @@ export default function DeckPreviewScreen() {
     if (copying) return;
     setCopying(true);
     try {
-      const newId = await copyDeck(deckId);
-      Alert.alert('Added to library', 'The deck was copied to your library.', [
-        { text: 'View deck', onPress: () => router.replace(`/deck/${newId}`) },
+      const newId = await copyFolder(folderId);
+      Alert.alert('Added to library', 'The folder was copied to your library.', [
+        { text: 'View folder', onPress: () => router.replace(`/folder/${newId}`) },
         { text: 'Close', style: 'cancel' },
       ]);
     } catch (e) {
@@ -71,16 +69,16 @@ export default function DeckPreviewScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'Deck preview' }} />
+        <Stack.Screen options={{ title: 'Folder preview' }} />
         <LoadingScreen />
       </View>
     );
   }
 
-  if (error || !deck) {
+  if (error || !folder) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'Deck preview' }} />
+        <Stack.Screen options={{ title: 'Folder preview' }} />
         <ErrorState message={error ?? undefined} onRetry={load} />
       </View>
     );
@@ -88,26 +86,30 @@ export default function DeckPreviewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen options={{ title: 'Deck preview' }} />
+      <Stack.Screen options={{ title: 'Folder preview' }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="title">{deck.title}</ThemedText>
+        <ThemedText type="title">{folder.name}</ThemedText>
         <ThemedText style={[styles.meta, { color: theme.muted }]}>
-          by {creator ?? 'Unknown'} · {cards.length} cards
+          by {creator ?? 'Unknown'} · {decks.length} decks
         </ThemedText>
-        {deck.description ? <ThemedText style={styles.desc}>{deck.description}</ThemedText> : null}
 
-        <ThemedText type="defaultSemiBold" style={styles.previewLabel}>
-          Card preview
-        </ThemedText>
-        {cards.map((card, index) => (
-          <ListRow
-            key={card.id}
-            icon="credit-card"
-            title={card.front}
-            subtitle={card.back}
-            rightText={`${index + 1}`}
-          />
-        ))}
+        {decks.length > 0 ? (
+          <>
+            <ThemedText type="defaultSemiBold" style={styles.sectionLabel}>
+              Decks in this folder
+            </ThemedText>
+            {decks.map((deck) => (
+              <ListRow
+                key={deck.id}
+                icon="style"
+                iconColor={theme.success}
+                title={deck.title}
+                subtitle={deck.description ?? undefined}
+                rightText={`${deck.cardCount} cards`}
+              />
+            ))}
+          </>
+        ) : null}
       </ScrollView>
 
       <View
@@ -117,7 +119,7 @@ export default function DeckPreviewScreen() {
           label="Add to library"
           onPress={handleCopy}
           loading={copying}
-          disabled={cards.length === 0}
+          disabled={decks.length === 0}
         />
       </View>
     </View>
@@ -136,16 +138,12 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 14,
   },
-  desc: {
-    lineHeight: 22,
-  },
-  previewLabel: {
+  sectionLabel: {
     marginTop: Spacing.sm,
   },
   footer: {
     padding: Spacing.lg,
     borderTopWidth: 1,
     gap: Spacing.md,
-    borderRadius: Radius.sm,
   },
 });

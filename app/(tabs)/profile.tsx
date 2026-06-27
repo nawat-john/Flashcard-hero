@@ -30,9 +30,9 @@ export default function ProfileScreen() {
   );
 
   function confirmSignOut() {
-    Alert.alert('ออกจากระบบ?', undefined, [
-      { text: 'ยกเลิก', style: 'cancel' },
-      { text: 'ออกจากระบบ', style: 'destructive', onPress: () => signOut() },
+    Alert.alert('Sign out?', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
   }
 
@@ -42,21 +42,21 @@ export default function ProfileScreen() {
         <MaterialIcons name="person" size={48} color={theme.muted} />
       </View>
 
-      <ThemedText type="subtitle">{displayName ?? 'ผู้ใช้'}</ThemedText>
+      <ThemedText type="subtitle">{displayName ?? 'User'}</ThemedText>
       <ThemedText style={[styles.email, { color: theme.muted }]}>{user?.email}</ThemedText>
 
       <View style={styles.actions}>
-        <Button label="แก้ไขชื่อที่แสดง" variant="secondary" onPress={() => setEditing(true)} />
-        <Button label="ออกจากระบบ" variant="danger" onPress={confirmSignOut} />
+        <Button label="Edit display name" variant="secondary" onPress={() => setEditing(true)} />
+        <Button label="Sign out" variant="danger" onPress={confirmSignOut} />
       </View>
 
       <FormModal
         visible={editing}
-        title="ชื่อที่แสดง"
+        title="Display name"
         fields={[
           {
             key: 'displayName',
-            label: 'ชื่อที่แสดง',
+            label: 'Display name',
             required: true,
             initialValue: displayName ?? '',
           },

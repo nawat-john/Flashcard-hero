@@ -7,21 +7,33 @@ import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
+import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { listPublicDecks, type PublicDeck } from '@/lib/discover';
+import {
+  listPublicDecks,
+  listPublicFolders,
+  type PublicDeck,
+  type PublicFolder,
+} from '@/lib/discover';
 
 export default function DiscoverScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [folders, setFolders] = useState<PublicFolder[]>([]);
   const [decks, setDecks] = useState<PublicDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (query: string) => {
     try {
-      setDecks(await listPublicDecks(query));
+      const [nextFolders, nextDecks] = await Promise.all([
+        listPublicFolders(query),
+        listPublicDecks(query),
+      ]);
+      setFolders(nextFolders);
+      setDecks(nextDecks);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'unknown error');
@@ -30,14 +42,14 @@ export default function DiscoverScreen() {
     }
   }, []);
 
-  // Refresh the full list whenever the tab regains focus.
   useFocusEffect(
     useCallback(() => {
       load(search);
-      // Only re-run on focus, not on each keystroke (search has its own submit).
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [load])
   );
+
+  const isEmpty = folders.length === 0 && decks.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -51,7 +63,7 @@ export default function DiscoverScreen() {
             onChangeText={setSearch}
             onSubmitEditing={() => load(search)}
             returnKeyType="search"
-            placeholder="ค้นหาเด็คสาธารณะ"
+            placeholder="Search public decks and folders"
             placeholderTextColor={theme.muted}
             autoCapitalize="none"
             style={[styles.searchInput, { color: theme.text }]}
@@ -63,11 +75,11 @@ export default function DiscoverScreen() {
         <LoadingScreen />
       ) : error ? (
         <ErrorState message={error} onRetry={() => load(search)} />
-      ) : decks.length === 0 ? (
+      ) : isEmpty ? (
         <EmptyState
           icon="explore"
-          title="ยังไม่พบเด็คสาธารณะ"
-          message="ลองเผยแพร่เด็คของคุณ หรือค้นด้วยคำอื่น"
+          title="No public content found"
+          message="Try publishing a deck or folder, or search for something else"
         />
       ) : (
         <ScrollView
@@ -75,17 +87,49 @@ export default function DiscoverScreen() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={false} onRefresh={() => load(search)} />}
         >
-          {decks.map((deck) => (
-            <ListRow
-              key={deck.id}
-              icon="public"
-              iconColor={theme.tint}
-              title={deck.title}
-              subtitle={`โดย ${deck.creatorName ?? 'ไม่ทราบชื่อ'}`}
-              rightText={`${deck.cardCount} ใบ`}
-              onPress={() => router.push(`/deck-preview/${deck.id}`)}
-            />
-          ))}
+          {folders.length > 0 ? (
+            <>
+              <ThemedText
+                type="defaultSemiBold"
+                style={[styles.sectionHeader, { color: theme.muted }]}
+              >
+                Folders
+              </ThemedText>
+              {folders.map((folder) => (
+                <ListRow
+                  key={folder.id}
+                  icon="folder"
+                  iconColor={theme.tint}
+                  title={folder.name}
+                  subtitle={`by ${folder.creatorName ?? 'Unknown'}`}
+                  rightText={`${folder.deckCount} decks`}
+                  onPress={() => router.push(`/folder-preview/${folder.id}` as any)}
+                />
+              ))}
+            </>
+          ) : null}
+
+          {decks.length > 0 ? (
+            <>
+              <ThemedText
+                type="defaultSemiBold"
+                style={[styles.sectionHeader, { color: theme.muted }]}
+              >
+                Decks
+              </ThemedText>
+              {decks.map((deck) => (
+                <ListRow
+                  key={deck.id}
+                  icon="public"
+                  iconColor={theme.success}
+                  title={deck.title}
+                  subtitle={`by ${deck.creatorName ?? 'Unknown'}`}
+                  rightText={`${deck.cardCount} cards`}
+                  onPress={() => router.push(`/deck-preview/${deck.id}`)}
+                />
+              ))}
+            </>
+          ) : null}
         </ScrollView>
       )}
     </View>
@@ -117,5 +161,12 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingTop: Spacing.sm,
     gap: Spacing.md,
+  },
+  sectionHeader: {
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginTop: Spacing.sm,
+    marginBottom: -Spacing.xs,
   },
 });

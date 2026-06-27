@@ -1,7 +1,14 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
@@ -13,12 +20,101 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { createCard, deleteCard, listCards, moveCard, updateCard } from '@/lib/cards';
+import { createCard, deleteCard, listCards, reorderCards, updateCard } from '@/lib/cards';
 import { getDeck, setDeckPublic } from '@/lib/decks';
 import { countDueCards } from '@/lib/reviews';
 import type { Card, Deck } from '@/lib/types';
 
+const ROW_HEIGHT = 64; // approximate height of each ListRow
+
 type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; card: Card };
+
+// ---------------------------------------------------------------------------
+// Draggable card row
+// ---------------------------------------------------------------------------
+
+type DragCardRowProps = {
+  card: Card;
+  index: number;
+  total: number;
+  onEdit: (card: Card) => void;
+  onDelete: (card: Card) => void;
+  onDragEnd: (fromIndex: number, toIndex: number) => void;
+};
+
+function DragCardRow({ card, index, total, onEdit, onDelete, onDragEnd }: DragCardRowProps) {
+  const theme = useAppTheme();
+  const translateY = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+
+  const cardMenu = useCallback(() => {
+    Alert.alert('Card', undefined, [
+      { text: 'Edit', onPress: () => onEdit(card) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert('Delete this card?', undefined, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => onDelete(card) },
+          ]),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [card, onEdit, onDelete]);
+
+  const dispatchDragEnd = useCallback(
+    (dy: number) => {
+      const steps = Math.round(dy / ROW_HEIGHT);
+      const newIndex = Math.max(0, Math.min(total - 1, index + steps));
+      if (newIndex !== index) onDragEnd(index, newIndex);
+    },
+    [index, total, onDragEnd]
+  );
+
+  const pan = Gesture.Pan()
+    .activateAfterLongPress(300)
+    .onStart(() => {
+      isDragging.value = true;
+    })
+    .onUpdate((e) => {
+      translateY.value = e.translationY;
+    })
+    .onEnd((e) => {
+      runOnJS(dispatchDragEnd)(e.translationY);
+      translateY.value = withSpring(0);
+      isDragging.value = false;
+    });
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    zIndex: isDragging.value ? 999 : 0,
+    shadowOpacity: isDragging.value ? 0.2 : 0,
+    shadowRadius: isDragging.value ? 8 : 0,
+    elevation: isDragging.value ? 6 : 0,
+    backgroundColor: isDragging.value ? theme.card : 'transparent',
+    borderRadius: isDragging.value ? Radius.md : 0,
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={animStyle}>
+        <ListRow
+          icon="credit-card"
+          title={card.front}
+          subtitle={card.back}
+          rightText={`${index + 1}`}
+          onPress={() => onEdit(card)}
+          onMorePress={cardMenu}
+        />
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Deck screen
+// ---------------------------------------------------------------------------
 
 export default function DeckScreen() {
   const theme = useAppTheme();
@@ -31,6 +127,8 @@ export default function DeckScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
+  // prevent double-submit during async reorder
+  const reordering = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -67,72 +165,45 @@ export default function DeckScreen() {
       await setDeckPublic(deck.id, value);
     } catch (e) {
       setDeck({ ...deck, isPublic: !value }); // revert on failure
-      Alert.alert('อัปเดตไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+      Alert.alert('Update failed', e instanceof Error ? e.message : 'Please try again');
     }
   }
 
   async function handleShare() {
     if (!deck) return;
     const url = Linking.createURL(`/deck-preview/${deck.id}`);
-    await Share.share({ message: `มาเรียน "${deck.title}" กันใน Flashcard Hero!\n${url}` });
+    await Share.share({ message: `Study "${deck.title}" with me on Flashcard Hero!\n${url}` });
   }
 
-  function cardMenu(card: Card, index: number) {
-    const buttons: Parameters<typeof Alert.alert>[2] = [
-      { text: 'แก้ไข', onPress: () => setModal({ kind: 'edit', card }) },
-    ];
-    if (index > 0) {
-      buttons.push({
-        text: 'เลื่อนขึ้น',
-        onPress: async () => {
-          await moveCard(deckId, card.id, 'up');
-          load();
-        },
-      });
+  async function handleDragEnd(fromIndex: number, toIndex: number) {
+    if (reordering.current) return;
+    reordering.current = true;
+    const next = [...cards];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setCards(next); // optimistic update
+    try {
+      await reorderCards(
+        deckId,
+        next.map((c) => c.id)
+      );
+    } catch {
+      setCards(cards); // revert
+    } finally {
+      reordering.current = false;
     }
-    if (index < cards.length - 1) {
-      buttons.push({
-        text: 'เลื่อนลง',
-        onPress: async () => {
-          await moveCard(deckId, card.id, 'down');
-          load();
-        },
-      });
-    }
-    buttons.push({
-      text: 'ลบ',
-      style: 'destructive',
-      onPress: () =>
-        Alert.alert('ลบการ์ดนี้?', undefined, [
-          { text: 'ยกเลิก', style: 'cancel' },
-          {
-            text: 'ลบ',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteCard(card.id);
-              load();
-            },
-          },
-        ]),
-    });
-    buttons.push({ text: 'ยกเลิก', style: 'cancel' });
-    Alert.alert('การ์ดนี้', undefined, buttons);
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen options={{ title: deck?.title ?? 'เด็ค' }} />
+      <Stack.Screen options={{ title: deck?.title ?? 'Deck' }} />
 
       {loading ? (
         <LoadingScreen />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : cards.length === 0 ? (
-        <EmptyState
-          icon="add-card"
-          title="ยังไม่มีการ์ด"
-          message="แตะปุ่ม + เพื่อเพิ่มการ์ดใบแรก"
-        />
+        <EmptyState icon="add-card" title="No cards yet" message="Tap + to add your first card" />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}
@@ -142,39 +213,45 @@ export default function DeckScreen() {
             style={[styles.publishBar, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
             <View style={styles.publishText}>
-              <ThemedText type="defaultSemiBold">เผยแพร่สู่สาธารณะ</ThemedText>
+              <ThemedText type="defaultSemiBold">Publish to public</ThemedText>
               <ThemedText style={[styles.publishHint, { color: theme.muted }]}>
-                {deck?.isPublic ? 'คนอื่นค้นเจอและคัดลอกได้' : 'เห็นเฉพาะคุณ'}
+                {deck?.isPublic ? 'Others can find and copy it' : 'Only visible to you'}
               </ThemedText>
             </View>
             <Switch value={!!deck?.isPublic} onValueChange={handleTogglePublic} />
           </View>
           {deck?.isPublic ? (
-            <Button label="แชร์ลิงก์" variant="secondary" onPress={handleShare} />
+            <Button label="Share link" variant="secondary" onPress={handleShare} />
           ) : null}
           {dueCount > 0 ? (
             <Button
-              label={`ทบทวนที่ถึงกำหนด (${dueCount})`}
+              label={`Review due (${dueCount})`}
               onPress={() =>
                 router.push({ pathname: '/study/[deckId]', params: { deckId, due: '1' } })
               }
             />
           ) : null}
           <Button
-            label={`เริ่มเรียนทั้งหมด (${cards.length} ใบ)`}
+            label={`Study all (${cards.length} cards)`}
             variant={dueCount > 0 ? 'secondary' : 'primary'}
             onPress={() => router.push(`/study/${deckId}`)}
             style={styles.studyButton}
           />
+          <ThemedText style={[styles.dragHint, { color: theme.muted }]}>
+            Long-press to drag and reorder
+          </ThemedText>
           {cards.map((card, index) => (
-            <ListRow
+            <DragCardRow
               key={card.id}
-              icon="credit-card"
-              title={card.front}
-              subtitle={card.back}
-              rightText={`${index + 1}`}
-              onPress={() => setModal({ kind: 'edit', card })}
-              onMorePress={() => cardMenu(card, index)}
+              card={card}
+              index={index}
+              total={cards.length}
+              onEdit={(c) => setModal({ kind: 'edit', card: c })}
+              onDelete={async (c) => {
+                await deleteCard(c.id);
+                load();
+              }}
+              onDragEnd={handleDragEnd}
             />
           ))}
         </ScrollView>
@@ -184,7 +261,7 @@ export default function DeckScreen() {
 
       <FormModal
         visible={modal.kind === 'create'}
-        title="เพิ่มการ์ด"
+        title="Add card"
         fields={cardFields()}
         onSubmit={async (values) => {
           await createCard(deckId, values.front, values.back);
@@ -195,7 +272,7 @@ export default function DeckScreen() {
       />
       <FormModal
         visible={modal.kind === 'edit'}
-        title="แก้ไขการ์ด"
+        title="Edit card"
         fields={
           modal.kind === 'edit' ? cardFields(modal.card.front, modal.card.back) : cardFields()
         }
@@ -216,16 +293,16 @@ function cardFields(front = '', back = ''): FormField[] {
   return [
     {
       key: 'front',
-      label: 'ด้านหน้า (คำถาม)',
-      placeholder: 'เช่น apple',
+      label: 'Front (question)',
+      placeholder: 'e.g. apple',
       multiline: true,
       required: true,
       initialValue: front,
     },
     {
       key: 'back',
-      label: 'ด้านหลัง (คำตอบ)',
-      placeholder: 'เช่น แอปเปิล',
+      label: 'Back (answer)',
+      placeholder: 'e.g. a round fruit',
       multiline: true,
       required: true,
       initialValue: back,
@@ -261,5 +338,10 @@ const styles = StyleSheet.create({
   },
   studyButton: {
     marginBottom: Spacing.sm,
+  },
+  dragHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: -Spacing.xs,
   },
 });
