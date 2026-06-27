@@ -1,0 +1,206 @@
+# แผนงานพัฒนาแอป Flashcard
+
+> แอป flashcard ที่สร้างโฟลเดอร์ซ้อนกันได้ สร้างการ์ดเอง แชร์ให้คนอื่น และโหลดของคนอื่นมาใช้ได้
+>
+> **Stack:** Expo (React Native + TypeScript) + Supabase (Postgres / Auth / Storage)
+>
+> **กลยุทธ์:** สร้างทีละ phase — local ก่อน แล้วค่อยต่อ cloud และฟีเจอร์แชร์ เพื่อให้เรียน mobile dev ได้โดยไม่ติดเรื่อง backend ตั้งแต่แรก
+
+---
+
+## ภาพรวมเป้าหมายแต่ละ Phase
+
+| Phase | เป้าหมาย                     | ผลลัพธ์ที่จับต้องได้                                |
+| ----- | ---------------------------- | --------------------------------------------------- |
+| 0     | ตั้งค่าเครื่องมือ + โปรเจกต์ | รันแอปเปล่าบนมือถือจริงได้                          |
+| 1     | Core local app               | สร้างโฟลเดอร์/deck/การ์ด + เรียนได้ (เก็บในเครื่อง) |
+| 2     | Auth + Cloud sync            | login ได้ ข้อมูลอยู่บน cloud                        |
+| 3     | แชร์ + Discover + โหลด       | เผยแพร่ deck และโหลดของคนอื่นได้                    |
+| 4     | ขัดเงา + ปล่อยจริง           | spaced repetition, ปรับ UX, ขึ้น store              |
+
+---
+
+## Phase 0 — ตั้งค่าโปรเจกต์และเครื่องมือ
+
+เป้าหมาย: ให้รันแอปเปล่าบนมือถือตัวเองได้ก่อน จะได้มั่นใจว่า toolchain พร้อม
+
+- [ ] ติดตั้ง Node.js (LTS) และตรวจ `node -v`
+- [ ] ติดตั้งแอป **Expo Go** บนมือถือ (iOS / Android)
+- [ ] สร้างโปรเจกต์: `npx create-expo-app@latest flashcard-app -t`
+- [ ] เลือก template ที่มี **TypeScript** + **expo-router**
+- [ ] รัน `npx expo start` แล้วสแกน QR เปิดบนมือถือจริงได้
+- [ ] ตั้งค่า ESLint + Prettier
+- [ ] สร้าง git repo + push ขึ้น GitHub
+- [ ] ลองแก้ข้อความบนหน้าจอแล้วเห็น hot reload ทำงาน
+
+**เช็คก่อนข้าม:** แอปเปล่ารันบนมือถือได้ และแก้โค้ดแล้วอัปเดตทันที
+
+---
+
+## Phase 1 — Core App (Local-only)
+
+เป้าหมาย: ทำฟีเจอร์หลักให้ครบโดย**ยังไม่มี backend** เก็บข้อมูลในเครื่องด้วย `expo-sqlite`
+นี่คือ phase ที่ใช้เวลามากที่สุดและได้เรียนรู้ mobile dev มากที่สุด
+
+### 1.1 วางโครงสร้างและ navigation
+
+- [ ] ออกแบบ folder structure ของโปรเจกต์ (`/app`, `/components`, `/lib`, `/db`)
+- [ ] ตั้งค่า bottom tabs: **คลังของฉัน / เรียน / โปรไฟล์** (โปรไฟล์ placeholder ไปก่อน)
+- [ ] ทำ theme พื้นฐาน (สี, typography, spacing) เก็บเป็น constants
+
+### 1.2 Local database
+
+- [ ] ติดตั้งและตั้งค่า `expo-sqlite`
+- [ ] เขียน schema: ตาราง `folders`, `decks`, `cards`
+- [ ] ทำระบบ migration ง่ายๆ (ไว้รัน schema ตอนเปิดแอปครั้งแรก)
+- [ ] เขียน data layer (ฟังก์ชัน CRUD) แยกออกจาก UI
+
+```
+folders (id, parent_id, name, created_at)        -- parent_id ชี้กลับมาที่ folders เอง = ซ้อนได้
+decks   (id, folder_id, title, description, created_at)
+cards   (id, deck_id, front, back, position, created_at)
+```
+
+### 1.3 โฟลเดอร์ซ้อนกัน (หัวใจของแอป)
+
+- [ ] หน้า browse: แสดงโฟลเดอร์ย่อย + deck ในโฟลเดอร์ปัจจุบัน
+- [ ] เดินเข้า/ออกโฟลเดอร์ (push หน้าใหม่ตาม navigation stack)
+- [ ] แสดง breadcrumb หรือปุ่ม back ให้รู้ว่าอยู่ชั้นไหน
+- [ ] สร้างโฟลเดอร์ใหม่ในชั้นปัจจุบัน
+- [ ] เปลี่ยนชื่อ / ลบโฟลเดอร์ (ลบแล้วต้องจัดการของข้างในด้วย)
+- [ ] ทดสอบโฟลเดอร์ซ้อนหลายๆ ชั้นว่าไม่พัง
+
+### 1.4 จัดการ Deck และการ์ด
+
+- [ ] สร้าง deck ใหม่ในโฟลเดอร์
+- [ ] หน้า deck: แสดงรายการการ์ดทั้งหมด
+- [ ] เพิ่มการ์ด (กรอกหน้า/หลัง)
+- [ ] แก้ไข / ลบการ์ด
+- [ ] จัดลำดับการ์ด (drag to reorder — optional)
+- [ ] แก้ชื่อ/คำอธิบาย deck, ลบ deck
+
+### 1.5 หน้าจอเรียน (Study)
+
+- [ ] เปิด deck แล้วเข้าโหมดเรียน
+- [ ] แสดงด้านหน้า → แตะเพื่อพลิกดูด้านหลัง (ใส่ flip animation)
+- [ ] ปุ่ม "จำได้ / จำไม่ได้" แล้วไปการ์ดถัดไป
+- [ ] สรุปผลตอนจบ (เรียนไปกี่ใบ ถูกกี่ใบ)
+- [ ] ปุ่มเริ่มใหม่ / สลับลำดับการ์ด (shuffle)
+
+**เช็คก่อนข้าม:** ใช้แอปสร้างโฟลเดอร์ซ้อน → สร้าง deck → ใส่การ์ด → นั่งเรียนได้จบ flow ครบ โดยไม่ต้องต่อเน็ต
+
+---
+
+## Phase 2 — Auth + Cloud Sync
+
+เป้าหมาย: ย้ายข้อมูลขึ้น cloud และให้ login ได้ เพื่อปูทางไปสู่การแชร์
+
+### 2.1 ตั้งค่า Supabase
+
+- [ ] สร้างโปรเจกต์ Supabase (free tier)
+- [ ] ติดตั้ง `@supabase/supabase-js` + เก็บ key ใน env (อย่า commit ลง git)
+- [ ] สร้าง schema บน Postgres (ดูตารางด้านล่าง)
+- [ ] เพิ่มตาราง `profiles` และ `card_reviews`
+
+```
+profiles      (id, display_name, created_at)
+folders       (id, owner_id, parent_id, name, created_at)
+decks         (id, owner_id, folder_id, title, description, is_public, created_at)
+cards         (id, deck_id, front, back, position)
+card_reviews  (user_id, card_id, due_date, interval, ease)   -- progress แยกของแต่ละคน
+```
+
+### 2.2 Authentication
+
+- [ ] ทำหน้า sign up / login (email + password)
+- [ ] จัดการ session (จำ login ไว้ตอนเปิดแอปใหม่)
+- [ ] สร้าง row ใน `profiles` อัตโนมัติตอนสมัคร
+- [ ] หน้าโปรไฟล์: แสดงชื่อ + ปุ่ม logout
+
+### 2.3 Row Level Security (สำคัญมาก — อย่าข้าม)
+
+- [ ] เปิด RLS ทุกตาราง
+- [ ] policy: user เห็น/แก้ได้เฉพาะข้อมูลที่ `owner_id` เป็นของตัวเอง
+- [ ] policy: ใครก็อ่าน deck/card ที่ `is_public = true` ได้ แต่แก้ไม่ได้
+- [ ] ทดสอบว่า user A แอบแก้ข้อมูล user B ไม่ได้
+
+### 2.4 ย้าย data layer มาใช้ Supabase
+
+- [ ] เปลี่ยนฟังก์ชัน CRUD จาก SQLite → Supabase
+- [ ] ดึงทั้งกิ่งโฟลเดอร์ด้วย recursive query (ทำเป็น Postgres function)
+- [ ] จัดการ loading / error state ในทุกหน้า
+- [ ] (optional) offline support — sync กลับเมื่อมีเน็ต
+
+**เช็คก่อนข้าม:** login จากมือถือสองเครื่องด้วยบัญชีเดียวกันแล้วเห็นข้อมูลตรงกัน
+
+---
+
+## Phase 3 — แชร์ + Discover + โหลด
+
+เป้าหมาย: ให้เผยแพร่ deck ของตัวเอง และโหลดของคนอื่นมาใช้ได้
+ใช้โมเดล **fork-on-copy**: โหลดแล้วได้ copy เป็นของตัวเอง ไม่ผูกกับต้นฉบับ
+
+### 3.1 เผยแพร่ (Share)
+
+- [ ] ปุ่ม toggle `is_public` บน deck
+- [ ] สร้าง share link / รหัสสำหรับแชร์ deck
+- [ ] (optional) แชร์ทั้งโฟลเดอร์ (เผยแพร่ทั้ง subtree)
+
+### 3.2 หน้า Discover
+
+- [ ] tab "ค้นพบ" แสดง public deck
+- [ ] ช่องค้นหาตามชื่อ deck
+- [ ] หน้า preview: ดูตัวอย่างการ์ดก่อนโหลด + ชื่อผู้สร้าง
+
+### 3.3 โหลดเข้าคลัง (Copy)
+
+- [ ] เขียน Postgres function "copy deck" — INSERT copy ของ deck + cards เข้าบัญชีผู้โหลด
+- [ ] ปุ่ม "เพิ่มเข้าคลัง" ในหน้า preview
+- [ ] กรณีโหลดทั้งโฟลเดอร์: copy ทั้ง subtree (folder + deck + card)
+- [ ] progress การเรียนของ copy เริ่มใหม่ (ไม่ติดมาจากต้นฉบับ)
+- [ ] ทดสอบ: เจ้าของแก้ต้นฉบับแล้ว copy ของคนอื่นต้องไม่เปลี่ยนตาม
+
+**เช็คก่อนข้าม:** เครื่อง A เผยแพร่ deck → เครื่อง B ค้นเจอ → โหลด → แก้ได้อิสระ
+
+---
+
+## Phase 4 — ขัดเงาและปล่อยจริง
+
+เป้าหมาย: ทำให้พร้อมใช้งานจริงและขึ้น store (ทำเท่าที่อยากทำ)
+
+### 4.1 Spaced Repetition
+
+- [ ] ใส่อัลกอริทึม SM-2 (แบบเดียวกับ Anki) ใช้ `card_reviews`
+- [ ] คำนวณ `due_date` จากผลการตอบ
+- [ ] โหมดเรียน "เฉพาะการ์ดที่ถึงกำหนด"
+
+### 4.2 ปรับ UX
+
+- [ ] empty state สวยๆ (ตอนยังไม่มี deck)
+- [ ] loading skeleton แทนหน้าจอว่าง
+- [ ] ยืนยันก่อนลบ
+- [ ] รองรับ dark mode
+- [ ] รองรับ swipe gesture ตอนเรียน
+
+### 4.3 เตรียมปล่อย
+
+- [ ] icon + splash screen
+- [ ] ทดสอบบนทั้ง iOS และ Android
+- [ ] build ด้วย EAS Build
+- [ ] (optional) ส่งขึ้น TestFlight / Google Play internal testing
+
+---
+
+## เคล็ดลับสำหรับแอปแรก
+
+- **ทำให้เสร็จทีละ Phase** — อย่ากระโดดไปทำแชร์ทั้งที่ local ยังไม่เสร็จ ความยากจะกองรวมกันจนท้อ
+- **แยก data layer ออกจาก UI** ตั้งแต่แรก — ตอนย้ายจาก SQLite ไป Supabase ใน Phase 2 จะแก้ที่เดียวจบ
+- **commit git บ่อยๆ** — ทุกครั้งที่ฟีเจอร์เล็กๆ ทำงานได้
+- **ทดสอบบนมือถือจริง** ไม่ใช่แค่ simulator — gesture/keyboard/ขนาดจอ ต่างกันจริง
+- **RLS ห้ามข้าม** — เป็นด่านความปลอดภัยหลัก ถ้าไม่ทำ ใครก็แก้ข้อมูลคนอื่นได้
+
+---
+
+## ก้าวต่อไป
+
+เริ่มที่ Phase 0 ให้รันแอปเปล่าบนมือถือได้ก่อน แล้วลุย Phase 1 ทีละข้อในเช็คลิสต์
