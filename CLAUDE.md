@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 0–3 are **done**: a flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) with email/password auth, a Supabase (Postgres) cloud backend, and sharing (publish decks, a Discover tab, fork-on-copy). `plan.md` (Thai) is the source of truth for what's next — **Phase 4** (SM-2 spaced repetition, UX polish, release) has not been started.
+Phases 0–4 are **done**: a flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) with email/password auth, a Supabase (Postgres) cloud backend, sharing (publish / Discover / fork-on-copy), and SM-2 spaced repetition. `plan.md` (Thai) is the source of truth. All in-app features are built; what remains are external-only items: a custom app icon (needs design art), on-device testing, and `eas build` / store submission (need the user's Expo + store accounts). `eas.json` and bundle ids (`com.flashcardhero.app`) are already in place.
+
+- **Spaced repetition** (`lib/reviews.ts`): a simplified SM-2 over `card_reviews`, storing only `interval`/`ease`/`due_date` (review stage is inferred from `interval`, so no extra column). Grading is binary; `recordReview` upserts on `(user_id, card_id)`. The study session records every grade and supports a due-only mode via `/study/[deckId]?due=1`; the deck screen shows a "review due (N)" button. Swipe right/left on the study card grades remembered/forgot (needs `GestureHandlerRootView`, set in `app/_layout.tsx`).
 
 The DB has two SQL files in `supabase/`: `schema.sql` (full, drops+recreates — source of truth) and `phase3.sql` (additive: the `list_public_decks` and `copy_deck` functions, safe to run on an existing DB). When changing the schema, update `schema.sql`; for additive changes also provide an incremental file so existing databases don't have to be dropped.
 

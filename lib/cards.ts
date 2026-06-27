@@ -71,3 +71,21 @@ export async function updateCard(id: string, front: string, back: string): Promi
 export async function deleteCard(id: string): Promise<void> {
   unwrap(await supabase.from('cards').delete().eq('id', id));
 }
+
+/** Swaps a card's position with its neighbour above/below (no-op at the ends). */
+export async function moveCard(
+  deckId: string,
+  cardId: string,
+  direction: 'up' | 'down'
+): Promise<void> {
+  const cards = await listCards(deckId);
+  const i = cards.findIndex((c) => c.id === cardId);
+  const j = direction === 'up' ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= cards.length) return;
+  const a = cards[i];
+  const b = cards[j];
+  await Promise.all([
+    supabase.from('cards').update({ position: b.position }).eq('id', a.id),
+    supabase.from('cards').update({ position: a.position }).eq('id', b.id),
+  ]);
+}

@@ -1,10 +1,13 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -17,7 +20,10 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { listCards } from '@/lib/cards';
 import { getDeck } from '@/lib/decks';
+import { getDueCards, recordReview } from '@/lib/reviews';
 import type { Card } from '@/lib/types';
+
+const SWIPE_THRESHOLD = 110;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -31,7 +37,8 @@ function shuffle<T>(items: T[]): T[] {
 export default function StudySessionScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { deckId } = useLocalSearchParams<{ deckId: string }>();
+  const { deckId, due } = useLocalSearchParams<{ deckId: string; due?: string }>();
+  const dueOnly = due === '1';
 
   const [title, setTitle] = useState('เรียน');
   const [order, setOrder] = useState<Card[]>([]);
@@ -43,6 +50,7 @@ export default function StudySessionScreen() {
   const [finished, setFinished] = useState(false);
 
   const flip = useSharedValue(0);
+  const translateX = useSharedValue(0);
   const [showingBack, setShowingBack] = useState(false);
 
   const start = useCallback(
@@ -53,14 +61,18 @@ export default function StudySessionScreen() {
       setFinished(false);
       setShowingBack(false);
       flip.value = 0;
+      translateX.value = 0;
     },
-    [flip]
+    [flip, translateX]
   );
 
   const loadSession = useCallback(async () => {
     setLoading(true);
     try {
-      const [deck, cards] = await Promise.all([getDeck(deckId), listCards(deckId)]);
+      const [deck, cards] = await Promise.all([
+        getDeck(deckId),
+        dueOnly ? getDueCards(deckId) : listCards(deckId),
+      ]);
       if (deck) setTitle(deck.title);
       start(cards);
       setError(null);
@@ -69,7 +81,7 @@ export default function StudySessionScreen() {
     } finally {
       setLoading(false);
     }
-  }, [deckId, start]);
+  }, [deckId, dueOnly, start]);
 
   useEffect(() => {
     loadSession();
@@ -87,6 +99,18 @@ export default function StudySessionScreen() {
       { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` },
     ],
   }));
+  const swipeStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { rotateZ: `${interpolate(translateX.value, [-220, 220], [-12, 12])}deg` },
+    ],
+  }));
+  const yesHintStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0, 1], 'clamp'),
+  }));
+  const noHintStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [-SWIPE_THRESHOLD, 0], [1, 0], 'clamp'),
+  }));
 
   function toggleFlip() {
     const next = !showingBack;
@@ -94,16 +118,37 @@ export default function StudySessionScreen() {
     flip.value = withTiming(next ? 1 : 0, { duration: 300 });
   }
 
-  function grade(remembered: boolean) {
-    if (remembered) setCorrect((c) => c + 1);
-    if (index + 1 >= order.length) {
-      setFinished(true);
-      return;
-    }
-    setIndex((i) => i + 1);
-    setShowingBack(false);
-    flip.value = 0;
-  }
+  const advance = useCallback(
+    (remembered: boolean) => {
+      const card = order[index];
+      if (card) void recordReview(card.id, remembered).catch(() => {});
+      if (remembered) setCorrect((c) => c + 1);
+      translateX.value = 0;
+      flip.value = 0;
+      setShowingBack(false);
+      if (index + 1 >= order.length) {
+        setFinished(true);
+        return;
+      }
+      setIndex((i) => i + 1);
+    },
+    [order, index, translateX, flip]
+  );
+
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-20, 20])
+        .onUpdate((e) => {
+          translateX.value = e.translationX;
+        })
+        .onEnd((e) => {
+          if (e.translationX > SWIPE_THRESHOLD) runOnJS(advance)(true);
+          else if (e.translationX < -SWIPE_THRESHOLD) runOnJS(advance)(false);
+          else translateX.value = withSpring(0);
+        }),
+    [advance, translateX]
+  );
 
   const current = order[index];
   const progress = useMemo(
@@ -134,9 +179,13 @@ export default function StudySessionScreen() {
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Stack.Screen options={{ title }} />
         <EmptyState
-          icon="inbox"
-          title="เด็คนี้ยังไม่มีการ์ด"
-          message="เพิ่มการ์ดก่อนแล้วค่อยกลับมาเรียน"
+          icon={dueOnly ? 'check-circle' : 'inbox'}
+          title={dueOnly ? 'เยี่ยม! ทบทวนครบแล้ว' : 'เด็คนี้ยังไม่มีการ์ด'}
+          message={
+            dueOnly
+              ? 'ตอนนี้ไม่มีการ์ดที่ถึงกำหนดทบทวน กลับมาใหม่ภายหลัง'
+              : 'เพิ่มการ์ดก่อนแล้วค่อยกลับมาเรียน'
+          }
         />
       </View>
     );
@@ -172,50 +221,67 @@ export default function StudySessionScreen() {
 
       <ThemedText style={[styles.progress, { color: theme.muted }]}>{progress}</ThemedText>
 
-      <Pressable style={styles.cardArea} onPress={toggleFlip}>
-        {current ? (
-          <View style={styles.cardWrapper}>
-            <Animated.View
-              style={[
-                styles.card,
-                { backgroundColor: theme.card, borderColor: theme.border },
-                frontStyle,
-              ]}
-            >
-              <ThemedText style={[styles.face, { color: theme.muted }]}>คำถาม</ThemedText>
-              <ThemedText type="title" style={styles.cardText}>
-                {current.front}
-              </ThemedText>
-              <ThemedText style={[styles.hint, { color: theme.muted }]}>แตะเพื่อพลิก</ThemedText>
-            </Animated.View>
-            <Animated.View
-              style={[
-                styles.card,
-                styles.cardBack,
-                { backgroundColor: theme.card, borderColor: theme.tint },
-                backStyle,
-              ]}
-            >
-              <ThemedText style={[styles.face, { color: theme.muted }]}>คำตอบ</ThemedText>
-              <ThemedText type="title" style={styles.cardText}>
-                {current.back}
-              </ThemedText>
-              <ThemedText style={[styles.hint, { color: theme.muted }]}>
-                แตะเพื่อพลิกกลับ
-              </ThemedText>
-            </Animated.View>
-          </View>
-        ) : null}
-      </Pressable>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.cardArea, swipeStyle]}>
+          <Pressable style={styles.cardWrapper} onPress={toggleFlip}>
+            {current ? (
+              <>
+                <Animated.View
+                  style={[
+                    styles.card,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                    frontStyle,
+                  ]}
+                >
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>คำถาม</ThemedText>
+                  <ThemedText type="title" style={styles.cardText}>
+                    {current.front}
+                  </ThemedText>
+                  <ThemedText style={[styles.hint, { color: theme.muted }]}>
+                    แตะเพื่อพลิก · ปัดเพื่อให้คะแนน
+                  </ThemedText>
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.card,
+                    styles.cardBack,
+                    { backgroundColor: theme.card, borderColor: theme.tint },
+                    backStyle,
+                  ]}
+                >
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>คำตอบ</ThemedText>
+                  <ThemedText type="title" style={styles.cardText}>
+                    {current.back}
+                  </ThemedText>
+                  <ThemedText style={[styles.hint, { color: theme.muted }]}>
+                    แตะเพื่อพลิกกลับ
+                  </ThemedText>
+                </Animated.View>
+
+                <Animated.View style={[styles.swipeTag, styles.swipeTagRight, yesHintStyle]}>
+                  <ThemedText style={[styles.swipeTagText, { color: theme.success }]}>
+                    จำได้
+                  </ThemedText>
+                </Animated.View>
+                <Animated.View style={[styles.swipeTag, styles.swipeTagLeft, noHintStyle]}>
+                  <ThemedText style={[styles.swipeTagText, { color: theme.danger }]}>
+                    จำไม่ได้
+                  </ThemedText>
+                </Animated.View>
+              </>
+            ) : null}
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
 
       <View style={styles.gradeRow}>
         <Button
           label="จำไม่ได้"
           variant="danger"
-          onPress={() => grade(false)}
+          onPress={() => advance(false)}
           style={styles.gradeButton}
         />
-        <Button label="จำได้" onPress={() => grade(true)} style={styles.gradeButton} />
+        <Button label="จำได้" onPress={() => advance(true)} style={styles.gradeButton} />
       </View>
     </View>
   );
@@ -269,6 +335,28 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Spacing.lg,
     fontSize: 13,
+  },
+  swipeTag: {
+    position: 'absolute',
+    top: Spacing.xl,
+    borderWidth: 2,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  swipeTagRight: {
+    left: Spacing.xl,
+    borderColor: '#1f9d55',
+    transform: [{ rotate: '-12deg' }],
+  },
+  swipeTagLeft: {
+    right: Spacing.xl,
+    borderColor: '#d7263d',
+    transform: [{ rotate: '12deg' }],
+  },
+  swipeTagText: {
+    fontSize: 18,
+    fontWeight: '800',
   },
   gradeRow: {
     flexDirection: 'row',

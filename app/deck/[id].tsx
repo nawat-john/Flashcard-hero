@@ -13,8 +13,9 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { createCard, deleteCard, listCards, updateCard } from '@/lib/cards';
+import { createCard, deleteCard, listCards, moveCard, updateCard } from '@/lib/cards';
 import { getDeck, setDeckPublic } from '@/lib/decks';
+import { countDueCards } from '@/lib/reviews';
 import type { Card, Deck } from '@/lib/types';
 
 type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; card: Card };
@@ -26,15 +27,21 @@ export default function DeckScreen() {
 
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
+  const [dueCount, setDueCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
   const load = useCallback(async () => {
     try {
-      const [nextDeck, nextCards] = await Promise.all([getDeck(deckId), listCards(deckId)]);
+      const [nextDeck, nextCards, due] = await Promise.all([
+        getDeck(deckId),
+        listCards(deckId),
+        countDueCards(deckId),
+      ]);
       setDeck(nextDeck);
       setCards(nextCards);
+      setDueCount(due);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'unknown error');
@@ -70,27 +77,46 @@ export default function DeckScreen() {
     await Share.share({ message: `มาเรียน "${deck.title}" กันใน Flashcard Hero!\n${url}` });
   }
 
-  function cardMenu(card: Card) {
-    Alert.alert('การ์ดนี้', undefined, [
+  function cardMenu(card: Card, index: number) {
+    const buttons: Parameters<typeof Alert.alert>[2] = [
       { text: 'แก้ไข', onPress: () => setModal({ kind: 'edit', card }) },
-      {
-        text: 'ลบ',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('ลบการ์ดนี้?', undefined, [
-            { text: 'ยกเลิก', style: 'cancel' },
-            {
-              text: 'ลบ',
-              style: 'destructive',
-              onPress: async () => {
-                await deleteCard(card.id);
-                load();
-              },
+    ];
+    if (index > 0) {
+      buttons.push({
+        text: 'เลื่อนขึ้น',
+        onPress: async () => {
+          await moveCard(deckId, card.id, 'up');
+          load();
+        },
+      });
+    }
+    if (index < cards.length - 1) {
+      buttons.push({
+        text: 'เลื่อนลง',
+        onPress: async () => {
+          await moveCard(deckId, card.id, 'down');
+          load();
+        },
+      });
+    }
+    buttons.push({
+      text: 'ลบ',
+      style: 'destructive',
+      onPress: () =>
+        Alert.alert('ลบการ์ดนี้?', undefined, [
+          { text: 'ยกเลิก', style: 'cancel' },
+          {
+            text: 'ลบ',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteCard(card.id);
+              load();
             },
-          ]),
-      },
-      { text: 'ยกเลิก', style: 'cancel' },
-    ]);
+          },
+        ]),
+    });
+    buttons.push({ text: 'ยกเลิก', style: 'cancel' });
+    Alert.alert('การ์ดนี้', undefined, buttons);
   }
 
   return (
@@ -126,13 +152,20 @@ export default function DeckScreen() {
           {deck?.isPublic ? (
             <Button label="แชร์ลิงก์" variant="secondary" onPress={handleShare} />
           ) : null}
-          {cards.length > 0 ? (
+          {dueCount > 0 ? (
             <Button
-              label={`เริ่มเรียน (${cards.length} ใบ)`}
-              onPress={() => router.push(`/study/${deckId}`)}
-              style={styles.studyButton}
+              label={`ทบทวนที่ถึงกำหนด (${dueCount})`}
+              onPress={() =>
+                router.push({ pathname: '/study/[deckId]', params: { deckId, due: '1' } })
+              }
             />
           ) : null}
+          <Button
+            label={`เริ่มเรียนทั้งหมด (${cards.length} ใบ)`}
+            variant={dueCount > 0 ? 'secondary' : 'primary'}
+            onPress={() => router.push(`/study/${deckId}`)}
+            style={styles.studyButton}
+          />
           {cards.map((card, index) => (
             <ListRow
               key={card.id}
@@ -141,7 +174,7 @@ export default function DeckScreen() {
               subtitle={card.back}
               rightText={`${index + 1}`}
               onPress={() => setModal({ kind: 'edit', card })}
-              onMorePress={() => cardMenu(card)}
+              onMorePress={() => cardMenu(card, index)}
             />
           ))}
         </ScrollView>
