@@ -5,8 +5,7 @@ import { FolderBrowser } from '@/components/folder-browser';
 import { getFolder } from '@/lib/folders';
 
 export default function FolderScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const folderId = Number(id);
+  const { id: folderId } = useLocalSearchParams<{ id: string }>();
   const [title, setTitle] = useState('โฟลเดอร์');
 
   useEffect(() => {

@@ -1,22 +1,75 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { StyleSheet, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
+import { Button } from '@/components/button';
+import { FormModal } from '@/components/form-modal';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
+import { useAuth } from '@/lib/auth';
+import { getProfile, updateDisplayName } from '@/lib/profiles';
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
+  const { user, signOut } = useAuth();
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    const profile = await getProfile(user.id);
+    setDisplayName(profile?.displayName ?? null);
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  function confirmSignOut() {
+    Alert.alert('ออกจากระบบ?', undefined, [
+      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'ออกจากระบบ', style: 'destructive', onPress: () => signOut() },
+    ]);
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.avatar, { backgroundColor: theme.surface }]}>
         <MaterialIcons name="person" size={48} color={theme.muted} />
       </View>
-      <ThemedText type="subtitle">โหมดออฟไลน์</ThemedText>
-      <ThemedText style={[styles.note, { color: theme.muted }]}>
-        ตอนนี้ข้อมูลทั้งหมดถูกเก็บไว้ในเครื่อง{'\n'}
-        การเข้าสู่ระบบและการแชร์จะมาใน Phase ถัดไป
-      </ThemedText>
+
+      <ThemedText type="subtitle">{displayName ?? 'ผู้ใช้'}</ThemedText>
+      <ThemedText style={[styles.email, { color: theme.muted }]}>{user?.email}</ThemedText>
+
+      <View style={styles.actions}>
+        <Button label="แก้ไขชื่อที่แสดง" variant="secondary" onPress={() => setEditing(true)} />
+        <Button label="ออกจากระบบ" variant="danger" onPress={confirmSignOut} />
+      </View>
+
+      <FormModal
+        visible={editing}
+        title="ชื่อที่แสดง"
+        fields={[
+          {
+            key: 'displayName',
+            label: 'ชื่อที่แสดง',
+            required: true,
+            initialValue: displayName ?? '',
+          },
+        ]}
+        onSubmit={async (values) => {
+          if (user) {
+            await updateDisplayName(user.id, values.displayName);
+          }
+          setEditing(false);
+          load();
+        }}
+        onClose={() => setEditing(false)}
+      />
     </View>
   );
 }
@@ -26,7 +79,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     padding: Spacing.xl,
   },
   avatar: {
@@ -37,8 +90,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
-  note: {
-    textAlign: 'center',
-    lineHeight: 22,
+  email: {
+    marginBottom: Spacing.lg,
+  },
+  actions: {
+    alignSelf: 'stretch',
+    gap: Spacing.md,
   },
 });

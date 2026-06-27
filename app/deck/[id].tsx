@@ -4,9 +4,11 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-nativ
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Fab } from '@/components/fab';
 import { FormModal, type FormField } from '@/components/form-modal';
 import { ListRow } from '@/components/list-row';
+import { LoadingScreen } from '@/components/loading-screen';
 import { Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { createCard, deleteCard, listCards, updateCard } from '@/lib/cards';
@@ -18,19 +20,25 @@ type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; card: 
 export default function DeckScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const deckId = Number(id);
+  const { id: deckId } = useLocalSearchParams<{ id: string }>();
 
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
   const load = useCallback(async () => {
-    const [nextDeck, nextCards] = await Promise.all([getDeck(deckId), listCards(deckId)]);
-    setDeck(nextDeck);
-    setCards(nextCards);
-    setLoading(false);
+    try {
+      const [nextDeck, nextCards] = await Promise.all([getDeck(deckId), listCards(deckId)]);
+      setDeck(nextDeck);
+      setCards(nextCards);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown error');
+    } finally {
+      setLoading(false);
+    }
   }, [deckId]);
 
   useFocusEffect(
@@ -70,7 +78,11 @@ export default function DeckScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Stack.Screen options={{ title: deck?.title ?? 'เด็ค' }} />
 
-      {cards.length === 0 && !loading ? (
+      {loading ? (
+        <LoadingScreen />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
+      ) : cards.length === 0 ? (
         <EmptyState
           icon="add-card"
           title="ยังไม่มีการ์ด"
@@ -102,7 +114,7 @@ export default function DeckScreen() {
         </ScrollView>
       )}
 
-      <Fab onPress={() => setModal({ kind: 'create' })} />
+      {!loading && !error ? <Fab onPress={() => setModal({ kind: 'create' })} /> : null}
 
       <FormModal
         visible={modal.kind === 'create'}

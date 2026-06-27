@@ -3,9 +3,11 @@ import { useCallback, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { Fab } from '@/components/fab';
 import { FormModal, type FormField } from '@/components/form-modal';
 import { ListRow } from '@/components/list-row';
+import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
@@ -26,7 +28,7 @@ type ModalState =
   | { kind: 'deck-create' }
   | { kind: 'deck-edit'; deck: DeckWithCount };
 
-export function FolderBrowser({ folderId }: { folderId: number | null }) {
+export function FolderBrowser({ folderId }: { folderId: string | null }) {
   const theme = useAppTheme();
   const router = useRouter();
 
@@ -34,18 +36,25 @@ export function FolderBrowser({ folderId }: { folderId: number | null }) {
   const [decks, setDecks] = useState<DeckWithCount[]>([]);
   const [path, setPath] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
   const load = useCallback(async () => {
-    const [nextFolders, nextDecks, nextPath] = await Promise.all([
-      listFolders(folderId),
-      listDecks(folderId),
-      getFolderPath(folderId),
-    ]);
-    setFolders(nextFolders);
-    setDecks(nextDecks);
-    setPath(nextPath);
-    setLoading(false);
+    try {
+      const [nextFolders, nextDecks, nextPath] = await Promise.all([
+        listFolders(folderId),
+        listDecks(folderId),
+        getFolderPath(folderId),
+      ]);
+      setFolders(nextFolders);
+      setDecks(nextDecks);
+      setPath(nextPath);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown error');
+    } finally {
+      setLoading(false);
+    }
   }, [folderId]);
 
   // Reload whenever the screen regains focus (e.g. returning from a child folder).
@@ -113,6 +122,18 @@ export function FolderBrowser({ folderId }: { folderId: number | null }) {
 
   const isEmpty = folders.length === 0 && decks.length === 0;
 
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <ErrorState message={error} onRetry={load} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {path.length > 0 ? (
@@ -121,7 +142,7 @@ export function FolderBrowser({ folderId }: { folderId: number | null }) {
         </ThemedText>
       ) : null}
 
-      {isEmpty && !loading ? (
+      {isEmpty ? (
         <EmptyState
           icon="folder-open"
           title="ยังว่างอยู่"

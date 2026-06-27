@@ -1,18 +1,21 @@
-/** Domain types used across the data layer and UI. */
+/** Domain types used across the data layer and UI. IDs are Supabase uuids. */
 
 export type Folder = {
-  id: number;
-  parentId: number | null;
+  id: string;
+  ownerId: string;
+  parentId: string | null;
   name: string;
-  createdAt: number;
+  createdAt: string;
 };
 
 export type Deck = {
-  id: number;
-  folderId: number | null;
+  id: string;
+  ownerId: string;
+  folderId: string | null;
   title: string;
   description: string | null;
-  createdAt: number;
+  isPublic: boolean;
+  createdAt: string;
 };
 
 /** A deck enriched with how many cards it holds (for list screens). */
@@ -21,10 +24,10 @@ export type DeckWithCount = Deck & {
 };
 
 export type Card = {
-  id: number;
-  deckId: number;
+  id: string;
+  deckId: string;
   front: string;
   back: string;
   position: number;
-  createdAt: number;
+  createdAt: string;
 };

@@ -3,7 +3,9 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
 import { ListRow } from '@/components/list-row';
+import { LoadingScreen } from '@/components/loading-screen';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { Spacing } from '@/constants/theme';
 import { listAllDecks } from '@/lib/decks';
@@ -14,10 +16,17 @@ export default function StudyTabScreen() {
   const router = useRouter();
   const [decks, setDecks] = useState<DeckWithCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setDecks(await listAllDecks());
-    setLoading(false);
+    try {
+      setDecks(await listAllDecks());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown error');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -26,7 +35,19 @@ export default function StudyTabScreen() {
     }, [load])
   );
 
-  if (decks.length === 0 && !loading) {
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <ErrorState message={error} onRetry={load} />
+      </View>
+    );
+  }
+
+  if (decks.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <EmptyState

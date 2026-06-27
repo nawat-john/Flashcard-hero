@@ -1,85 +1,88 @@
-import { getDatabase } from '@/db';
+import { supabase, unwrap } from '@/lib/supabase';
 import type { Deck, DeckWithCount } from '@/lib/types';
 
 type DeckRow = {
-  id: number;
-  folder_id: number | null;
+  id: string;
+  owner_id: string;
+  folder_id: string | null;
   title: string;
   description: string | null;
-  created_at: number;
-  card_count?: number;
+  is_public: boolean;
+  created_at: string;
 };
+
+type DeckRowWithCount = DeckRow & { cards: { count: number }[] };
 
 function toDeck(row: DeckRow): Deck {
   return {
     id: row.id,
+    ownerId: row.owner_id,
     folderId: row.folder_id,
     title: row.title,
     description: row.description,
+    isPublic: row.is_public,
     createdAt: row.created_at,
   };
 }
 
-function toDeckWithCount(row: DeckRow): DeckWithCount {
-  return { ...toDeck(row), cardCount: row.card_count ?? 0 };
+function toDeckWithCount(row: DeckRowWithCount): DeckWithCount {
+  return { ...toDeck(row), cardCount: row.cards?.[0]?.count ?? 0 };
 }
 
-const SELECT_WITH_COUNT = `
-  SELECT d.*, (SELECT COUNT(*) FROM cards c WHERE c.deck_id = d.id) AS card_count
-  FROM decks d
-`;
+const SELECT_WITH_COUNT = '*, cards(count)';
 
 /** Decks directly inside `folderId` (use `null` for the root level). */
-export async function listDecks(folderId: number | null): Promise<DeckWithCount[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<DeckRow>(
-    folderId === null
-      ? `${SELECT_WITH_COUNT} WHERE d.folder_id IS NULL ORDER BY d.title COLLATE NOCASE`
-      : `${SELECT_WITH_COUNT} WHERE d.folder_id = ? ORDER BY d.title COLLATE NOCASE`,
-    folderId === null ? [] : [folderId]
-  );
+export async function listDecks(folderId: string | null): Promise<DeckWithCount[]> {
+  let query = supabase.from('decks').select(SELECT_WITH_COUNT).order('title');
+  query = folderId === null ? query.is('folder_id', null) : query.eq('folder_id', folderId);
+  const rows = unwrap(await query) as DeckRowWithCount[];
   return rows.map(toDeckWithCount);
 }
 
-/** Every deck in the library, newest first — backs the Study tab. */
+/** Every deck the user owns, newest first — backs the Study tab. */
 export async function listAllDecks(): Promise<DeckWithCount[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<DeckRow>(`${SELECT_WITH_COUNT} ORDER BY d.created_at DESC`);
+  const rows = unwrap(
+    await supabase.from('decks').select(SELECT_WITH_COUNT).order('created_at', { ascending: false })
+  ) as DeckRowWithCount[];
   return rows.map(toDeckWithCount);
 }
 
-export async function getDeck(id: number): Promise<Deck | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<DeckRow>('SELECT * FROM decks WHERE id = ?', [id]);
+export async function getDeck(id: string): Promise<Deck | null> {
+  const row = unwrap(await supabase.from('decks').select('*').eq('id', id).maybeSingle());
   return row ? toDeck(row) : null;
 }
 
 export async function createDeck(
-  folderId: number | null,
+  folderId: string | null,
   title: string,
   description: string
-): Promise<number> {
-  const db = await getDatabase();
-  const trimmedDescription = description.trim();
-  const result = await db.runAsync(
-    'INSERT INTO decks (folder_id, title, description, created_at) VALUES (?, ?, ?, ?)',
-    [folderId, title.trim(), trimmedDescription.length > 0 ? trimmedDescription : null, Date.now()]
+): Promise<string> {
+  const trimmed = description.trim();
+  const row = unwrap(
+    await supabase
+      .from('decks')
+      .insert({
+        folder_id: folderId,
+        title: title.trim(),
+        description: trimmed.length > 0 ? trimmed : null,
+      })
+      .select('*')
+      .single()
   );
-  return result.lastInsertRowId;
+  return row.id;
 }
 
-export async function updateDeck(id: number, title: string, description: string): Promise<void> {
-  const db = await getDatabase();
-  const trimmedDescription = description.trim();
-  await db.runAsync('UPDATE decks SET title = ?, description = ? WHERE id = ?', [
-    title.trim(),
-    trimmedDescription.length > 0 ? trimmedDescription : null,
-    id,
-  ]);
+export async function updateDeck(id: string, title: string, description: string): Promise<void> {
+  const trimmed = description.trim();
+  unwrap(
+    await supabase
+      .from('decks')
+      .update({ title: title.trim(), description: trimmed.length > 0 ? trimmed : null })
+      .eq('id', id)
+  );
 }
 
 /** Deletes a deck. ON DELETE CASCADE removes its cards. */
-export async function deleteDeck(id: number): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync('DELETE FROM decks WHERE id = ?', [id]);
+export async function deleteDeck(id: string): Promise<void> {
+  unwrap(await supabase.from('decks').delete().eq('id', id));
 }

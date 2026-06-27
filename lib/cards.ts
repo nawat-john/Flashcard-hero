@@ -1,13 +1,13 @@
-import { getDatabase } from '@/db';
+import { supabase, unwrap } from '@/lib/supabase';
 import type { Card } from '@/lib/types';
 
 type CardRow = {
-  id: number;
-  deck_id: number;
+  id: string;
+  deck_id: string;
   front: string;
   back: string;
   position: number;
-  created_at: number;
+  created_at: string;
 };
 
 function toCard(row: CardRow): Card {
@@ -22,44 +22,52 @@ function toCard(row: CardRow): Card {
 }
 
 /** Cards of a deck, in their authored order. */
-export async function listCards(deckId: number): Promise<Card[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<CardRow>(
-    'SELECT * FROM cards WHERE deck_id = ? ORDER BY position, id',
-    [deckId]
-  );
+export async function listCards(deckId: string): Promise<Card[]> {
+  const rows =
+    unwrap(
+      await supabase
+        .from('cards')
+        .select('*')
+        .eq('deck_id', deckId)
+        .order('position')
+        .order('created_at')
+    ) ?? [];
   return rows.map(toCard);
 }
 
-export async function getCard(id: number): Promise<Card | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<CardRow>('SELECT * FROM cards WHERE id = ?', [id]);
+export async function getCard(id: string): Promise<Card | null> {
+  const row = unwrap(await supabase.from('cards').select('*').eq('id', id).maybeSingle());
   return row ? toCard(row) : null;
 }
 
-export async function createCard(deckId: number, front: string, back: string): Promise<number> {
-  const db = await getDatabase();
-  const next = await db.getFirstAsync<{ next_position: number }>(
-    'SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM cards WHERE deck_id = ?',
-    [deckId]
+export async function createCard(deckId: string, front: string, back: string): Promise<string> {
+  // Append after the current last card.
+  const last = unwrap(
+    await supabase
+      .from('cards')
+      .select('position')
+      .eq('deck_id', deckId)
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle()
   );
-  const result = await db.runAsync(
-    'INSERT INTO cards (deck_id, front, back, position, created_at) VALUES (?, ?, ?, ?, ?)',
-    [deckId, front.trim(), back.trim(), next?.next_position ?? 0, Date.now()]
+  const position = (last?.position ?? -1) + 1;
+  const row = unwrap(
+    await supabase
+      .from('cards')
+      .insert({ deck_id: deckId, front: front.trim(), back: back.trim(), position })
+      .select('*')
+      .single()
   );
-  return result.lastInsertRowId;
+  return row.id;
 }
 
-export async function updateCard(id: number, front: string, back: string): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync('UPDATE cards SET front = ?, back = ? WHERE id = ?', [
-    front.trim(),
-    back.trim(),
-    id,
-  ]);
+export async function updateCard(id: string, front: string, back: string): Promise<void> {
+  unwrap(
+    await supabase.from('cards').update({ front: front.trim(), back: back.trim() }).eq('id', id)
+  );
 }
 
-export async function deleteCard(id: number): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync('DELETE FROM cards WHERE id = ?', [id]);
+export async function deleteCard(id: string): Promise<void> {
+  unwrap(await supabase.from('cards').delete().eq('id', id));
 }

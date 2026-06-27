@@ -10,6 +10,8 @@ import Animated, {
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorState } from '@/components/error-state';
+import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
@@ -30,11 +32,11 @@ export default function StudySessionScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
-  const id = Number(deckId);
 
   const [title, setTitle] = useState('เรียน');
   const [order, setOrder] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [index, setIndex] = useState(0);
   const [correct, setCorrect] = useState(0);
@@ -55,14 +57,23 @@ export default function StudySessionScreen() {
     [flip]
   );
 
-  useEffect(() => {
-    (async () => {
-      const [deck, cards] = await Promise.all([getDeck(id), listCards(id)]);
+  const loadSession = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [deck, cards] = await Promise.all([getDeck(deckId), listCards(deckId)]);
       if (deck) setTitle(deck.title);
       start(cards);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown error');
+    } finally {
       setLoading(false);
-    })();
-  }, [id, start]);
+    }
+  }, [deckId, start]);
+
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
 
   const frontStyle = useAnimatedStyle(() => ({
     transform: [
@@ -100,7 +111,25 @@ export default function StudySessionScreen() {
     [index, order.length]
   );
 
-  if (!loading && order.length === 0) {
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Stack.Screen options={{ title }} />
+        <LoadingScreen />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Stack.Screen options={{ title }} />
+        <ErrorState message={error} onRetry={loadSession} />
+      </View>
+    );
+  }
+
+  if (order.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Stack.Screen options={{ title }} />

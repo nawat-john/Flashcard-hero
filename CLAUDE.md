@@ -4,18 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 0 and 1 are **done**: a working local-only flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) backed by `expo-sqlite`. `plan.md` (Thai) is the source of truth for what's next — **Phase 2** (Supabase auth + cloud sync) has not been started.
+Phases 0–2 are **done**: a flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) with email/password auth and a Supabase (Postgres) cloud backend. `plan.md` (Thai) is the source of truth for what's next — **Phase 3** (share / discover / copy public decks) has not been started.
 
 SDK is pinned to **54** deliberately: the target device runs Expo Go for SDK 54, and Expo Go only loads its own SDK. Do not bump the Expo SDK without confirming the device's Expo Go version first (a mismatch makes the app refuse to open). Bumping the SDK means `npx expo install expo@<sdk>` then `npx expo install --fix`.
 
+### Supabase setup (required to run)
+
+The app needs a Supabase project. `lib/supabase.ts` reads `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` from `.env` (gitignored; see `.env.example`). Until real values are present, `isSupabaseConfigured` is false and the login screen shows a setup notice instead of the form. The full schema + RLS lives in `supabase/schema.sql` — run it once in the Supabase SQL editor. After editing `.env` you must restart `npm start` (Expo inlines `EXPO_PUBLIC_*` at bundle time).
+
 ### Layout
 
-Routes are in root-level `app/` (expo-router, file-based — not `src/app/`). Shared code sits in root `components/`, `constants/`, `hooks/`. Phase 1 added:
+Routes are in root-level `app/` (expo-router, file-based — not `src/app/`). Shared code sits in root `components/`, `constants/`, `hooks/`, `lib/`.
 
-- `db/index.ts` — the single shared SQLite connection (`getDatabase()`) plus an append-only migration runner keyed on `PRAGMA user_version`. **Never reorder/edit existing migrations; only append.** Foreign keys are enabled per-connection here, which is what makes `ON DELETE CASCADE` recursively clean up nested folders → decks → cards.
-- `lib/` — the data layer (`folders.ts`, `decks.ts`, `cards.ts`, `types.ts`). Pure async functions over `getDatabase()`; **no React imports**. This is the SQLite↔Supabase swap boundary from the plan — screens import from `lib/`, never touch SQL.
-- Routes: `app/(tabs)/` = the three tabs (`index` = Library browser, `study` = pick-a-deck list, `profile` = offline placeholder). Detail screens live outside the tabs in the root stack: `app/folder/[id].tsx` (nested browse), `app/deck/[id].tsx` (cards), `app/study/[deckId].tsx` (flip-card session).
-- Both the Library tab and `folder/[id]` render the shared `components/folder-browser.tsx` (folderId `null` = root). Screens reload data via `useFocusEffect` so returning from a child refreshes counts/lists.
+- `lib/supabase.ts` — the shared Supabase client (session persisted in AsyncStorage) plus `unwrap()`, which throws on a Postgrest error and returns `data`. **All data-layer calls go through `unwrap`.**
+- `lib/` data layer — `folders.ts`, `decks.ts`, `cards.ts`, `profiles.ts`, `types.ts`. Pure async functions over the Supabase client; **no React imports**. Screens import from here and never touch the client directly. `owner_id` is **never set client-side** — the DB column defaults to `auth.uid()`, and RLS enforces ownership.
+- IDs are Supabase **uuids (strings)**, not numbers. Route params are used as-is (no `Number(...)`).
+- `lib/auth.tsx` — `AuthProvider` + `useAuth()` (session, `signIn`/`signUp`/`signOut`). `app/_layout.tsx`'s `RootNavigator` redirects between `(auth)` and the app based on session (the standard expo-router auth-group guard).
+- Routes: `app/(auth)/login.tsx` (sign in/up). `app/(tabs)/` = three tabs (`index` = Library browser, `study` = pick-a-deck list, `profile` = account + logout). Detail screens in the root stack: `app/folder/[id].tsx`, `app/deck/[id].tsx`, `app/study/[deckId].tsx`.
+- Both the Library tab and `folder/[id]` render the shared `components/folder-browser.tsx` (folderId `null` = root). Screens reload via `useFocusEffect` and show `LoadingScreen` / `ErrorState` (with retry) around the async data layer.
+
+`supabase/schema.sql` is the single source of truth for the DB. **Keep it in sync** when changing tables/policies; there's no migration tool — you re-run the file (it drops + recreates the app tables).
 
 ## Commands
 
