@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phase 0 is **done**: the Expo app is scaffolded at the repo root (Expo SDK 56, React Native 0.85, React 19, TypeScript 6, expo-router with a tabs layout). `plan.md` (Thai) remains the source of truth for what to build next — Phase 1 (core local app on `expo-sqlite`) is the next milestone and has not been started.
+Phase 0 is **done**: the Expo app is scaffolded at the repo root (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6 with a tabs layout). `plan.md` (Thai) remains the source of truth for what to build next — Phase 1 (core local app on `expo-sqlite`) is the next milestone and has not been started.
 
-Routes live in `src/app/` (expo-router, file-based). The default template still ships its starter screens (`index.tsx`, `explore.tsx`); these get replaced in Phase 1 by the three-tab structure from the plan (คลังของฉัน / เรียน / โปรไฟล์).
+SDK is pinned to **54** deliberately: the target device runs Expo Go for SDK 54, and Expo Go only loads its own SDK. Do not bump the Expo SDK without confirming the device's Expo Go version first (a mismatch makes the app refuse to open). Bumping the SDK means `npx expo install expo@<sdk>` then `npx expo install --fix`.
+
+Routes live in `app/` (expo-router, file-based — note: root-level `app/`, not `src/app/`). The default template still ships its starter screens (`app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/modal.tsx`); these get replaced in Phase 1 by the three-tab structure from the plan (คลังของฉัน / เรียน / โปรไฟล์). Shared code sits in root `components/`, `constants/`, `hooks/`.
 
 ## Commands
 
@@ -68,6 +70,7 @@ Phase 4 adds SM-2 spaced repetition computed over `card_reviews` (`due_date` der
 
 - Secrets (Supabase keys) go in env files and must not be committed.
 - The plan and its checklists are in Thai; match the language already in use in surrounding files/UI when contributing.
-- Path alias `@/*` maps to `src/*` (see `tsconfig.json`); prefer it over long relative imports.
-- `AGENTS.md` warns that Expo APIs change between versions — check the versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing Expo-specific code.
-- `expo-env.d.ts` is generated and gitignored; recreate it with `/// <reference types="expo/types" />` if a typecheck complains about missing `.css`/`.module.css` module declarations.
+- Path alias `@/*` maps to the repo root `./*` (see `tsconfig.json`); prefer it over long relative imports.
+- `AGENTS.md` warns that Expo APIs change between versions — check the versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing Expo-specific code.
+- Typed routes are on (`app.json` → `experiments.typedRoutes`). Route literal types live in `.expo/types/` and are regenerated when the dev server runs; if `tsc` complains a valid route string isn't assignable to `Href`, run `npm start` once to regenerate them.
+- `expo-env.d.ts` is generated and gitignored; recreate it with `/// <reference types="expo/types" />` if a typecheck complains about missing module declarations.

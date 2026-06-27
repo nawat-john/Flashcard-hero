@@ -24,14 +24,14 @@
 
 เป้าหมาย: ให้รันแอปเปล่าบนมือถือตัวเองได้ก่อน จะได้มั่นใจว่า toolchain พร้อม
 
-- [ ] ติดตั้ง Node.js (LTS) และตรวจ `node -v`
-- [ ] ติดตั้งแอป **Expo Go** บนมือถือ (iOS / Android)
-- [ ] สร้างโปรเจกต์: `npx create-expo-app@latest flashcard-app -t`
-- [ ] เลือก template ที่มี **TypeScript** + **expo-router**
-- [ ] รัน `npx expo start` แล้วสแกน QR เปิดบนมือถือจริงได้
-- [ ] ตั้งค่า ESLint + Prettier
-- [ ] สร้าง git repo + push ขึ้น GitHub
-- [ ] ลองแก้ข้อความบนหน้าจอแล้วเห็น hot reload ทำงาน
+- [x] ติดตั้ง Node.js (LTS) และตรวจ `node -v` — Node v24.16.0
+- [x] ติดตั้งแอป **Expo Go** บนมือถือ (iOS / Android) — มี Expo Go SDK 54 บน iPad → โปรเจกต์ pin ที่ **Expo SDK 54** ให้ตรงกัน
+- [x] สร้างโปรเจกต์: `npx create-expo-app@latest flashcard-app -t` — scaffold ที่ root ของ repo (**Expo SDK 54**)
+- [x] เลือก template ที่มี **TypeScript** + **expo-router** — default template (tabs)
+- [~] รัน `npx expo start` แล้วสแกน QR เปิดบนมือถือจริงได้ — dev server รันได้ + bundle export ผ่าน; _สแกน QR เองบนมือถือ_
+- [x] ตั้งค่า ESLint + Prettier — `npm run lint` / `npm run format` ผ่าน
+- [~] สร้าง git repo + push ขึ้น GitHub — commit แรกเสร็จแล้วในเครื่อง; _push ขึ้น GitHub เอง_
+- [ ] ลองแก้ข้อความบนหน้าจอแล้วเห็น hot reload ทำงาน — _ลองเองหลังเปิดบนมือถือ_
 
 **เช็คก่อนข้าม:** แอปเปล่ารันบนมือถือได้ และแก้โค้ดแล้วอัปเดตทันที
 
