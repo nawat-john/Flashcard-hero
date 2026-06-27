@@ -1,6 +1,7 @@
+import * as Linking from 'expo-linking';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
@@ -17,6 +18,7 @@ import {
   getFolderPath,
   listFolders,
   renameFolder,
+  shareFolder,
 } from '@/lib/folders';
 import { createDeck, deleteDeck, listDecks, setDeckPublic, updateDeck } from '@/lib/decks';
 import type { DeckWithCount, Folder } from '@/lib/types';
@@ -104,9 +106,40 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
     ]);
   }
 
+  async function handleShareFolder(folder: Folder) {
+    const next = !folder.isPublic;
+    try {
+      await shareFolder(folder.id, next);
+      if (next) {
+        const url = Linking.createURL(`/folder-preview/${folder.id}`);
+        await Share.share({ message: `มาเรียน "${folder.name}" กันใน Flashcard Hero!\n${url}` });
+      }
+      load();
+    } catch (e) {
+      Alert.alert('อัปเดตไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+    }
+  }
+
   function folderMenu(folder: Folder) {
-    Alert.alert(folder.name, undefined, [
+    Alert.alert(folder.name, folder.isPublic ? 'สถานะ: เผยแพร่' : 'สถานะ: ส่วนตัว', [
       { text: 'เปลี่ยนชื่อ', onPress: () => setModal({ kind: 'folder-rename', folder }) },
+      {
+        text: folder.isPublic ? 'เลิกเผยแพร่โฟลเดอร์' : 'เผยแพร่โฟลเดอร์สู่สาธารณะ',
+        onPress: () => handleShareFolder(folder),
+      },
+      ...(folder.isPublic
+        ? [
+            {
+              text: 'แชร์ลิงก์โฟลเดอร์',
+              onPress: async () => {
+                const url = Linking.createURL(`/folder-preview/${folder.id}`);
+                await Share.share({
+                  message: `มาเรียน "${folder.name}" กันใน Flashcard Hero!\n${url}`,
+                });
+              },
+            },
+          ]
+        : []),
       { text: 'ลบ', style: 'destructive', onPress: () => confirmDeleteFolder(folder) },
       { text: 'ยกเลิก', style: 'cancel' },
     ]);
@@ -165,6 +198,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
               key={`folder-${folder.id}`}
               icon="folder"
               title={folder.name}
+              rightText={folder.isPublic ? '🌐' : undefined}
               onPress={() => router.push(`/folder/${folder.id}`)}
               onMorePress={() => folderMenu(folder)}
             />

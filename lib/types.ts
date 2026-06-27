@@ -5,6 +5,7 @@ export type Folder = {
   ownerId: string;
   parentId: string | null;
   name: string;
+  isPublic: boolean;
   createdAt: string;
 };
 
@@ -30,4 +31,12 @@ export type Card = {
   back: string;
   position: number;
   createdAt: string;
+};
+
+/** Per-user study progress for one card (the SM-2 schedule). */
+export type Review = {
+  cardId: string;
+  dueDate: string | null;
+  interval: number;
+  ease: number;
 };
