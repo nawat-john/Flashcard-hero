@@ -27,6 +27,43 @@ export const Colors = {
   },
 };
 
+/** Extra palette used by the app's own screens (not part of the navigation theme). */
+export const Palette = {
+  light: {
+    card: '#ffffff',
+    surface: '#f2f4f7',
+    border: '#e3e7ec',
+    muted: '#687076',
+    danger: '#d7263d',
+    success: '#1f9d55',
+  },
+  dark: {
+    card: '#1e2022',
+    surface: '#1b1d1e',
+    border: '#2c3032',
+    muted: '#9BA1A6',
+    danger: '#ff6b81',
+    success: '#3ddc84',
+  },
+};
+
+/** 4pt spacing scale. */
+export const Spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+};
+
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  pill: 999,
+};
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

@@ -4,11 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phase 0 is **done**: the Expo app is scaffolded at the repo root (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6 with a tabs layout). `plan.md` (Thai) remains the source of truth for what to build next — Phase 1 (core local app on `expo-sqlite`) is the next milestone and has not been started.
+Phases 0 and 1 are **done**: a working local-only flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) backed by `expo-sqlite`. `plan.md` (Thai) is the source of truth for what's next — **Phase 2** (Supabase auth + cloud sync) has not been started.
 
 SDK is pinned to **54** deliberately: the target device runs Expo Go for SDK 54, and Expo Go only loads its own SDK. Do not bump the Expo SDK without confirming the device's Expo Go version first (a mismatch makes the app refuse to open). Bumping the SDK means `npx expo install expo@<sdk>` then `npx expo install --fix`.
 
-Routes live in `app/` (expo-router, file-based — note: root-level `app/`, not `src/app/`). The default template still ships its starter screens (`app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/modal.tsx`); these get replaced in Phase 1 by the three-tab structure from the plan (คลังของฉัน / เรียน / โปรไฟล์). Shared code sits in root `components/`, `constants/`, `hooks/`.
+### Layout
+
+Routes are in root-level `app/` (expo-router, file-based — not `src/app/`). Shared code sits in root `components/`, `constants/`, `hooks/`. Phase 1 added:
+
+- `db/index.ts` — the single shared SQLite connection (`getDatabase()`) plus an append-only migration runner keyed on `PRAGMA user_version`. **Never reorder/edit existing migrations; only append.** Foreign keys are enabled per-connection here, which is what makes `ON DELETE CASCADE` recursively clean up nested folders → decks → cards.
+- `lib/` — the data layer (`folders.ts`, `decks.ts`, `cards.ts`, `types.ts`). Pure async functions over `getDatabase()`; **no React imports**. This is the SQLite↔Supabase swap boundary from the plan — screens import from `lib/`, never touch SQL.
+- Routes: `app/(tabs)/` = the three tabs (`index` = Library browser, `study` = pick-a-deck list, `profile` = offline placeholder). Detail screens live outside the tabs in the root stack: `app/folder/[id].tsx` (nested browse), `app/deck/[id].tsx` (cards), `app/study/[deckId].tsx` (flip-card session).
+- Both the Library tab and `folder/[id]` render the shared `components/folder-browser.tsx` (folderId `null` = root). Screens reload data via `useFocusEffect` so returning from a child refreshes counts/lists.
 
 ## Commands
 

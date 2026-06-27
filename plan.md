@@ -44,16 +44,16 @@
 
 ### 1.1 วางโครงสร้างและ navigation
 
-- [ ] ออกแบบ folder structure ของโปรเจกต์ (`/app`, `/components`, `/lib`, `/db`)
-- [ ] ตั้งค่า bottom tabs: **คลังของฉัน / เรียน / โปรไฟล์** (โปรไฟล์ placeholder ไปก่อน)
-- [ ] ทำ theme พื้นฐาน (สี, typography, spacing) เก็บเป็น constants
+- [x] ออกแบบ folder structure ของโปรเจกต์ (`/app`, `/components`, `/lib`, `/db`)
+- [x] ตั้งค่า bottom tabs: **คลังของฉัน / เรียน / โปรไฟล์** (โปรไฟล์ placeholder ไปก่อน)
+- [x] ทำ theme พื้นฐาน (สี, typography, spacing) เก็บเป็น constants — `Palette` / `Spacing` / `Radius` + hook `useAppTheme`
 
 ### 1.2 Local database
 
-- [ ] ติดตั้งและตั้งค่า `expo-sqlite`
-- [ ] เขียน schema: ตาราง `folders`, `decks`, `cards`
-- [ ] ทำระบบ migration ง่ายๆ (ไว้รัน schema ตอนเปิดแอปครั้งแรก)
-- [ ] เขียน data layer (ฟังก์ชัน CRUD) แยกออกจาก UI
+- [x] ติดตั้งและตั้งค่า `expo-sqlite` — connection เดียวร่วมกันใน `db/index.ts`
+- [x] เขียน schema: ตาราง `folders`, `decks`, `cards` (เปิด foreign keys + `ON DELETE CASCADE`)
+- [x] ทำระบบ migration ง่ายๆ (ไว้รัน schema ตอนเปิดแอปครั้งแรก) — append-only ตาม `PRAGMA user_version`
+- [x] เขียน data layer (ฟังก์ชัน CRUD) แยกออกจาก UI — `lib/folders.ts` / `lib/decks.ts` / `lib/cards.ts` (ไม่มี React)
 
 ```
 folders (id, parent_id, name, created_at)        -- parent_id ชี้กลับมาที่ folders เอง = ซ้อนได้
@@ -63,29 +63,29 @@ cards   (id, deck_id, front, back, position, created_at)
 
 ### 1.3 โฟลเดอร์ซ้อนกัน (หัวใจของแอป)
 
-- [ ] หน้า browse: แสดงโฟลเดอร์ย่อย + deck ในโฟลเดอร์ปัจจุบัน
-- [ ] เดินเข้า/ออกโฟลเดอร์ (push หน้าใหม่ตาม navigation stack)
-- [ ] แสดง breadcrumb หรือปุ่ม back ให้รู้ว่าอยู่ชั้นไหน
-- [ ] สร้างโฟลเดอร์ใหม่ในชั้นปัจจุบัน
-- [ ] เปลี่ยนชื่อ / ลบโฟลเดอร์ (ลบแล้วต้องจัดการของข้างในด้วย)
-- [ ] ทดสอบโฟลเดอร์ซ้อนหลายๆ ชั้นว่าไม่พัง
+- [x] หน้า browse: แสดงโฟลเดอร์ย่อย + deck ในโฟลเดอร์ปัจจุบัน — `components/folder-browser.tsx`
+- [x] เดินเข้า/ออกโฟลเดอร์ (push หน้าใหม่ตาม navigation stack) — `app/folder/[id].tsx`
+- [x] แสดง breadcrumb หรือปุ่ม back ให้รู้ว่าอยู่ชั้นไหน — มีทั้ง back ของ stack และ breadcrumb (recursive CTE)
+- [x] สร้างโฟลเดอร์ใหม่ในชั้นปัจจุบัน
+- [x] เปลี่ยนชื่อ / ลบโฟลเดอร์ (ลบแล้วต้องจัดการของข้างในด้วย) — cascade ลบทั้ง subtree
+- [~] ทดสอบโฟลเดอร์ซ้อนหลายๆ ชั้นว่าไม่พัง — _ทดสอบบนมือถือเอง (logic + build ผ่านแล้ว)_
 
 ### 1.4 จัดการ Deck และการ์ด
 
-- [ ] สร้าง deck ใหม่ในโฟลเดอร์
-- [ ] หน้า deck: แสดงรายการการ์ดทั้งหมด
-- [ ] เพิ่มการ์ด (กรอกหน้า/หลัง)
-- [ ] แก้ไข / ลบการ์ด
-- [ ] จัดลำดับการ์ด (drag to reorder — optional)
-- [ ] แก้ชื่อ/คำอธิบาย deck, ลบ deck
+- [x] สร้าง deck ใหม่ในโฟลเดอร์
+- [x] หน้า deck: แสดงรายการการ์ดทั้งหมด — `app/deck/[id].tsx`
+- [x] เพิ่มการ์ด (กรอกหน้า/หลัง)
+- [x] แก้ไข / ลบการ์ด
+- [ ] จัดลำดับการ์ด (drag to reorder — optional) — _ข้ามไว้ก่อน (optional); มีคอลัมน์ `position` รองรับแล้ว_
+- [x] แก้ชื่อ/คำอธิบาย deck, ลบ deck
 
 ### 1.5 หน้าจอเรียน (Study)
 
-- [ ] เปิด deck แล้วเข้าโหมดเรียน
-- [ ] แสดงด้านหน้า → แตะเพื่อพลิกดูด้านหลัง (ใส่ flip animation)
-- [ ] ปุ่ม "จำได้ / จำไม่ได้" แล้วไปการ์ดถัดไป
-- [ ] สรุปผลตอนจบ (เรียนไปกี่ใบ ถูกกี่ใบ)
-- [ ] ปุ่มเริ่มใหม่ / สลับลำดับการ์ด (shuffle)
+- [x] เปิด deck แล้วเข้าโหมดเรียน — `app/study/[deckId].tsx` (เข้าได้จากหน้า deck หรือแท็บ “เรียน”)
+- [x] แสดงด้านหน้า → แตะเพื่อพลิกดูด้านหลัง (ใส่ flip animation) — reanimated rotateY
+- [x] ปุ่ม "จำได้ / จำไม่ได้" แล้วไปการ์ดถัดไป
+- [x] สรุปผลตอนจบ (เรียนไปกี่ใบ ถูกกี่ใบ)
+- [x] ปุ่มเริ่มใหม่ / สลับลำดับการ์ด (shuffle) — สลับลำดับทุกครั้งที่เริ่ม
 
 **เช็คก่อนข้าม:** ใช้แอปสร้างโฟลเดอร์ซ้อน → สร้าง deck → ใส่การ์ด → นั่งเรียนได้จบ flow ครบ โดยไม่ต้องต่อเน็ต
 
