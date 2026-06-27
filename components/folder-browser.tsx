@@ -18,7 +18,7 @@ import {
   listFolders,
   renameFolder,
 } from '@/lib/folders';
-import { createDeck, deleteDeck, listDecks, updateDeck } from '@/lib/decks';
+import { createDeck, deleteDeck, listDecks, setDeckPublic, updateDeck } from '@/lib/decks';
 import type { DeckWithCount, Folder } from '@/lib/types';
 
 type ModalState =
@@ -113,8 +113,15 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
   }
 
   function deckMenu(deck: DeckWithCount) {
-    Alert.alert(deck.title, undefined, [
+    Alert.alert(deck.title, deck.isPublic ? 'สถานะ: เผยแพร่' : 'สถานะ: ส่วนตัว', [
       { text: 'แก้ไขรายละเอียด', onPress: () => setModal({ kind: 'deck-edit', deck }) },
+      {
+        text: deck.isPublic ? 'เลิกเผยแพร่' : 'เผยแพร่สู่สาธารณะ',
+        onPress: async () => {
+          await setDeckPublic(deck.id, !deck.isPublic);
+          load();
+        },
+      },
       { text: 'ลบ', style: 'destructive', onPress: () => confirmDeleteDeck(deck) },
       { text: 'ยกเลิก', style: 'cancel' },
     ]);
@@ -169,7 +176,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
               iconColor={theme.success}
               title={deck.title}
               subtitle={deck.description ?? undefined}
-              rightText={`${deck.cardCount} ใบ`}
+              rightText={`${deck.cardCount} ใบ${deck.isPublic ? ' · 🌐' : ''}`}
               onPress={() => router.push(`/deck/${deck.id}`)}
               onMorePress={() => deckMenu(deck)}
             />

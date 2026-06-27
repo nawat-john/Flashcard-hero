@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 0–2 are **done**: a flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) with email/password auth and a Supabase (Postgres) cloud backend. `plan.md` (Thai) is the source of truth for what's next — **Phase 3** (share / discover / copy public decks) has not been started.
+Phases 0–3 are **done**: a flashcard app (**Expo SDK 54**, React Native 0.81, React 19.1, TypeScript 5.9, expo-router 6) with email/password auth, a Supabase (Postgres) cloud backend, and sharing (publish decks, a Discover tab, fork-on-copy). `plan.md` (Thai) is the source of truth for what's next — **Phase 4** (SM-2 spaced repetition, UX polish, release) has not been started.
+
+The DB has two SQL files in `supabase/`: `schema.sql` (full, drops+recreates — source of truth) and `phase3.sql` (additive: the `list_public_decks` and `copy_deck` functions, safe to run on an existing DB). When changing the schema, update `schema.sql`; for additive changes also provide an incremental file so existing databases don't have to be dropped.
 
 SDK is pinned to **54** deliberately: the target device runs Expo Go for SDK 54, and Expo Go only loads its own SDK. Do not bump the Expo SDK without confirming the device's Expo Go version first (a mismatch makes the app refuse to open). Bumping the SDK means `npx expo install expo@<sdk>` then `npx expo install --fix`.
 
@@ -20,7 +22,8 @@ Routes are in root-level `app/` (expo-router, file-based — not `src/app/`). Sh
 - `lib/` data layer — `folders.ts`, `decks.ts`, `cards.ts`, `profiles.ts`, `types.ts`. Pure async functions over the Supabase client; **no React imports**. Screens import from here and never touch the client directly. `owner_id` is **never set client-side** — the DB column defaults to `auth.uid()`, and RLS enforces ownership.
 - IDs are Supabase **uuids (strings)**, not numbers. Route params are used as-is (no `Number(...)`).
 - `lib/auth.tsx` — `AuthProvider` + `useAuth()` (session, `signIn`/`signUp`/`signOut`). `app/_layout.tsx`'s `RootNavigator` redirects between `(auth)` and the app based on session (the standard expo-router auth-group guard).
-- Routes: `app/(auth)/login.tsx` (sign in/up). `app/(tabs)/` = three tabs (`index` = Library browser, `study` = pick-a-deck list, `profile` = account + logout). Detail screens in the root stack: `app/folder/[id].tsx`, `app/deck/[id].tsx`, `app/study/[deckId].tsx`.
+- Routes: `app/(auth)/login.tsx` (sign in/up). `app/(tabs)/` = four tabs (`index` = Library browser, `study` = pick-a-deck list, `discover` = public decks, `profile` = account + logout). Detail screens in the root stack: `app/folder/[id].tsx`, `app/deck/[id].tsx` (owner view + publish toggle/share), `app/deck-preview/[id].tsx` (read-only view of any public deck + "add to library"), `app/study/[deckId].tsx`.
+- Sharing is **fork-on-copy**: `copy_deck()` (server-side, `security invoker`) duplicates a public/owned deck + its cards under the caller, private. Copies get new card ids so study progress never carries over. `lib/discover.ts` wraps the discover/preview queries; `setDeckPublic`/`copyDeck` are in `lib/decks.ts`.
 - Both the Library tab and `folder/[id]` render the shared `components/folder-browser.tsx` (folderId `null` = root). Screens reload via `useFocusEffect` and show `LoadingScreen` / `ErrorState` (with retry) around the async data layer.
 
 `supabase/schema.sql` is the single source of truth for the DB. **Keep it in sync** when changing tables/policies; there's no migration tool — you re-run the file (it drops + recreates the app tables).

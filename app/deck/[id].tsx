@@ -1,6 +1,7 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useCallback, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
@@ -9,10 +10,11 @@ import { Fab } from '@/components/fab';
 import { FormModal, type FormField } from '@/components/form-modal';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
-import { Spacing } from '@/constants/theme';
+import { ThemedText } from '@/components/themed-text';
+import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { createCard, deleteCard, listCards, updateCard } from '@/lib/cards';
-import { getDeck } from '@/lib/decks';
+import { getDeck, setDeckPublic } from '@/lib/decks';
 import type { Card, Deck } from '@/lib/types';
 
 type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; card: Card };
@@ -49,6 +51,23 @@ export default function DeckScreen() {
 
   function closeModal() {
     setModal({ kind: 'none' });
+  }
+
+  async function handleTogglePublic(value: boolean) {
+    if (!deck) return;
+    setDeck({ ...deck, isPublic: value }); // optimistic
+    try {
+      await setDeckPublic(deck.id, value);
+    } catch (e) {
+      setDeck({ ...deck, isPublic: !value }); // revert on failure
+      Alert.alert('อัปเดตไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+    }
+  }
+
+  async function handleShare() {
+    if (!deck) return;
+    const url = Linking.createURL(`/deck-preview/${deck.id}`);
+    await Share.share({ message: `มาเรียน "${deck.title}" กันใน Flashcard Hero!\n${url}` });
   }
 
   function cardMenu(card: Card) {
@@ -93,6 +112,20 @@ export default function DeckScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
         >
+          <View
+            style={[styles.publishBar, { backgroundColor: theme.card, borderColor: theme.border }]}
+          >
+            <View style={styles.publishText}>
+              <ThemedText type="defaultSemiBold">เผยแพร่สู่สาธารณะ</ThemedText>
+              <ThemedText style={[styles.publishHint, { color: theme.muted }]}>
+                {deck?.isPublic ? 'คนอื่นค้นเจอและคัดลอกได้' : 'เห็นเฉพาะคุณ'}
+              </ThemedText>
+            </View>
+            <Switch value={!!deck?.isPublic} onValueChange={handleTogglePublic} />
+          </View>
+          {deck?.isPublic ? (
+            <Button label="แชร์ลิงก์" variant="secondary" onPress={handleShare} />
+          ) : null}
           {cards.length > 0 ? (
             <Button
               label={`เริ่มเรียน (${cards.length} ใบ)`}
@@ -175,6 +208,23 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.md,
     paddingBottom: 96,
+  },
+  publishBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  publishText: {
+    flex: 1,
+    gap: 2,
+  },
+  publishHint: {
+    fontSize: 13,
   },
   studyButton: {
     marginBottom: Spacing.sm,

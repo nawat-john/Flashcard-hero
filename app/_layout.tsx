@@ -38,6 +38,7 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="folder/[id]" options={{ title: 'โฟลเดอร์' }} />
       <Stack.Screen name="deck/[id]" options={{ title: 'เด็ค' }} />
+      <Stack.Screen name="deck-preview/[id]" options={{ title: 'ตัวอย่างเด็ค' }} />
       <Stack.Screen name="study/[deckId]" options={{ title: 'เรียน' }} />
     </Stack>
   );

@@ -86,3 +86,26 @@ export async function updateDeck(id: string, title: string, description: string)
 export async function deleteDeck(id: string): Promise<void> {
   unwrap(await supabase.from('decks').delete().eq('id', id));
 }
+
+/** Publish/unpublish a deck (Phase 3 sharing). */
+export async function setDeckPublic(id: string, isPublic: boolean): Promise<void> {
+  unwrap(await supabase.from('decks').update({ is_public: isPublic }).eq('id', id));
+}
+
+/**
+ * Fork-on-copy: server-side duplicates a public (or owned) deck and its cards
+ * into the caller's library as a private, independent copy. Returns the new
+ * deck id.
+ */
+export async function copyDeck(
+  sourceDeckId: string,
+  targetFolderId: string | null = null
+): Promise<string> {
+  const newId = unwrap(
+    await supabase.rpc('copy_deck', {
+      source_deck_id: sourceDeckId,
+      target_folder_id: targetFolderId,
+    })
+  );
+  return newId as string;
+}
