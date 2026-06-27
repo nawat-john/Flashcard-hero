@@ -28,7 +28,11 @@ export async function listFolders(parentId: string | null): Promise<Folder[]> {
   await store.ensureLoaded();
   if (store.isOnline()) {
     try {
+      // Scope to the caller: RLS would otherwise also return other people's
+      // public folders, which must not appear in the user's own Library.
+      const uid = await store.getUserId();
       let query = supabase.from('folders').select('*').order('name');
+      if (uid) query = query.eq('owner_id', uid);
       query = parentId === null ? query.is('parent_id', null) : query.eq('parent_id', parentId);
       const rows = (unwrap(await query) ?? []) as FolderRow[];
       const result = rows.map(toFolder);
@@ -49,7 +53,9 @@ export async function getFolder(id: string): Promise<Folder | null> {
         await supabase.from('folders').select('*').eq('id', id).maybeSingle()
       ) as FolderRow | null;
       const result = row ? toFolder(row) : null;
-      if (result) store.cacheFolder(result);
+      // Only cache folders the caller owns; a previewed public folder belongs to
+      // someone else and must not pollute the owned-data mirror.
+      if (result && result.ownerId === (await store.getUserId())) store.cacheFolder(result);
       return result;
     } catch {
       // fall through to mirror

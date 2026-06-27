@@ -42,7 +42,11 @@ export async function listDecks(folderId: string | null): Promise<DeckWithCount[
   await store.ensureLoaded();
   if (store.isOnline()) {
     try {
+      // Scope to the caller so other people's public decks don't show in the
+      // user's own Library (RLS alone would also return is_public rows).
+      const uid = await store.getUserId();
       let query = supabase.from('decks').select(SELECT_WITH_COUNT).order('title');
+      if (uid) query = query.eq('owner_id', uid);
       query = folderId === null ? query.is('folder_id', null) : query.eq('folder_id', folderId);
       const rows = (unwrap(await query) ?? []) as DeckRowWithCount[];
       const result = rows.map(toDeckWithCount);
@@ -60,12 +64,13 @@ export async function listAllDecks(): Promise<DeckWithCount[]> {
   await store.ensureLoaded();
   if (store.isOnline()) {
     try {
-      const rows = (unwrap(
-        await supabase
-          .from('decks')
-          .select(SELECT_WITH_COUNT)
-          .order('created_at', { ascending: false })
-      ) ?? []) as DeckRowWithCount[];
+      const uid = await store.getUserId();
+      let query = supabase
+        .from('decks')
+        .select(SELECT_WITH_COUNT)
+        .order('created_at', { ascending: false });
+      if (uid) query = query.eq('owner_id', uid);
+      const rows = (unwrap(await query) ?? []) as DeckRowWithCount[];
       const result = rows.map(toDeckWithCount);
       store.cacheDecks(result);
       return result;
@@ -86,7 +91,8 @@ export async function getDeck(id: string): Promise<Deck | null> {
         await supabase.from('decks').select('*').eq('id', id).maybeSingle()
       ) as DeckRow | null;
       const result = row ? toDeck(row) : null;
-      if (result) store.cacheDeck(result);
+      // Only cache owned decks; a previewed public deck belongs to someone else.
+      if (result && result.ownerId === (await store.getUserId())) store.cacheDeck(result);
       return result;
     } catch {
       // fall through to mirror

@@ -49,9 +49,23 @@ npm run typecheck      # tsc --noEmit
 npm run format         # prettier --write .
 npm run format:check   # prettier --check .
 npx expo-doctor        # validate dependency/config health
+npm test               # jest lib — unit tests (no network, no credentials needed)
+npm run test:e2e       # jest e2e — data-layer e2e against live Supabase (see below)
+npm run test:all       # jest — all tests
 ```
 
-There is no test runner wired up yet. Add one (and document the single-test command here) when the first tests land.
+### Test setup
+
+Unit tests (`lib/*.test.ts`) run fully offline with mocked Supabase and React Native modules.
+
+E2E tests (`e2e/data-layer.test.ts`) require a live Supabase project and two pre-created test accounts. Add to `.env` (gitignored):
+```
+TEST_USER1_EMAIL=...
+TEST_USER1_PASSWORD=...
+TEST_USER2_EMAIL=...
+TEST_USER2_PASSWORD=...
+```
+E2E tests are skipped (not failed) when these vars are absent, so `npm test` always passes on a bare checkout.
 
 ## What is being built
 
