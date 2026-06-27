@@ -12,7 +12,7 @@ import type { Card, Review } from '@/lib/types';
  *   - interval === 1              → seen once
  *   - interval >= 2              → graduated, interval grows by `ease`
  *
- * Grading is binary (the study UI's "จำได้ / จำไม่ได้"): remembered ≈ SM-2
+ * Grading is binary (the study UI's "Got it / Forgot"): remembered ≈ SM-2
  * quality 4 (ease unchanged), forgot resets the interval and lowers ease.
  */
 

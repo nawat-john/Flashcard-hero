@@ -34,10 +34,10 @@ export default function LoginScreen() {
         <ThemedText type="title" style={styles.brand}>
           Flashcard Hero
         </ThemedText>
-        <ThemedText type="subtitle">ยังไม่ได้เชื่อม Supabase</ThemedText>
+        <ThemedText type="subtitle">Supabase not connected</ThemedText>
         <ThemedText style={[styles.setup, { color: theme.muted }]}>
-          ใส่ค่า EXPO_PUBLIC_SUPABASE_URL และ EXPO_PUBLIC_SUPABASE_ANON_KEY ในไฟล์ `.env`{'\n'}
-          แล้วรัน `npm start` ใหม่ (ดูขั้นตอนเต็มใน `supabase/schema.sql`)
+          Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in `.env`{'\n'}
+          then restart `npm start` (full steps in `supabase/schema.sql`)
         </ThemedText>
       </View>
     );
@@ -58,14 +58,17 @@ export default function LoginScreen() {
         const { needsConfirmation } = await signUp(email, password, displayName);
         if (needsConfirmation) {
           Alert.alert(
-            'ยืนยันอีเมล',
-            'เราส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว ยืนยันก่อนแล้วค่อยเข้าสู่ระบบ'
+            'Confirm your email',
+            'We sent a confirmation link to your email. Confirm it before signing in.'
           );
           setMode('signIn');
         }
       }
     } catch (error) {
-      Alert.alert('เกิดข้อผิดพลาด', error instanceof Error ? error.message : 'ลองอีกครั้ง');
+      Alert.alert(
+        'Something went wrong',
+        error instanceof Error ? error.message : 'Please try again'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -86,14 +89,14 @@ export default function LoginScreen() {
           Flashcard Hero
         </ThemedText>
         <ThemedText style={[styles.subtitle, { color: theme.muted }]}>
-          {mode === 'signIn' ? 'เข้าสู่ระบบเพื่อใช้คลังของคุณ' : 'สร้างบัญชีใหม่'}
+          {mode === 'signIn' ? 'Sign in to access your library' : 'Create a new account'}
         </ThemedText>
 
         {mode === 'signUp' ? (
           <TextInput
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="ชื่อที่แสดง"
+            placeholder="Display name"
             placeholderTextColor={theme.muted}
             style={inputStyle}
           />
@@ -101,7 +104,7 @@ export default function LoginScreen() {
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder="อีเมล"
+          placeholder="Email"
           placeholderTextColor={theme.muted}
           autoCapitalize="none"
           autoCorrect={false}
@@ -112,21 +115,25 @@ export default function LoginScreen() {
         <TextInput
           value={password}
           onChangeText={setPassword}
-          placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
+          placeholder="Password (at least 6 characters)"
           placeholderTextColor={theme.muted}
           secureTextEntry
           style={inputStyle}
         />
 
         <Button
-          label={mode === 'signIn' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'}
+          label={mode === 'signIn' ? 'Sign in' : 'Sign up'}
           onPress={handleSubmit}
           disabled={!canSubmit}
           loading={submitting}
           style={styles.submit}
         />
         <Button
-          label={mode === 'signIn' ? 'ยังไม่มีบัญชี? สมัครสมาชิก' : 'มีบัญชีแล้ว? เข้าสู่ระบบ'}
+          label={
+            mode === 'signIn'
+              ? "Don't have an account? Sign up"
+              : 'Already have an account? Sign in'
+          }
           variant="secondary"
           onPress={() => setMode((m) => (m === 'signIn' ? 'signUp' : 'signIn'))}
         />

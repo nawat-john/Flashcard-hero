@@ -17,12 +17,12 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
     <View style={styles.container}>
       <MaterialIcons name="cloud-off" size={56} color={theme.muted} />
       <ThemedText type="subtitle" style={styles.title}>
-        โหลดข้อมูลไม่สำเร็จ
+        Failed to load
       </ThemedText>
       {message ? (
         <ThemedText style={[styles.message, { color: theme.muted }]}>{message}</ThemedText>
       ) : null}
-      {onRetry ? <Button label="ลองอีกครั้ง" onPress={onRetry} style={styles.retry} /> : null}
+      {onRetry ? <Button label="Try again" onPress={onRetry} style={styles.retry} /> : null}
     </View>
   );
 }

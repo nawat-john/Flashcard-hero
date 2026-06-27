@@ -19,7 +19,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'คลังของฉัน',
+          title: 'Library',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="folder" size={size} color={color} />
           ),
@@ -28,7 +28,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="study"
         options={{
-          title: 'เรียน',
+          title: 'Study',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="school" size={size} color={color} />
           ),
@@ -37,7 +37,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'ค้นพบ',
+          title: 'Discover',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="explore" size={size} color={color} />
           ),
@@ -46,7 +46,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'โปรไฟล์',
+          title: 'Profile',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="person" size={size} color={color} />
           ),

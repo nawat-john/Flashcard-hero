@@ -52,8 +52,8 @@ export default function StudyTabScreen() {
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <EmptyState
           icon="school"
-          title="ยังไม่มีเด็คให้เรียน"
-          message="สร้างเด็คในแท็บ “คลังของฉัน” แล้วกลับมาที่นี่เพื่อเริ่มเรียน"
+          title="No decks to study yet"
+          message="Create a deck in the Library tab, then come back here to start studying"
         />
       </View>
     );
@@ -72,7 +72,7 @@ export default function StudyTabScreen() {
           iconColor={theme.success}
           title={deck.title}
           subtitle={deck.description ?? undefined}
-          rightText={`${deck.cardCount} ใบ`}
+          rightText={`${deck.cardCount} cards`}
           onPress={() => router.push(`/study/${deck.id}`)}
         />
       ))}

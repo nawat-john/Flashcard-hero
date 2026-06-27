@@ -55,11 +55,11 @@ function RootNavigator() {
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="folder/[id]" options={{ title: 'โฟลเดอร์' }} />
-      <Stack.Screen name="folder-preview/[id]" options={{ title: 'ตัวอย่างโฟลเดอร์' }} />
-      <Stack.Screen name="deck/[id]" options={{ title: 'เด็ค' }} />
-      <Stack.Screen name="deck-preview/[id]" options={{ title: 'ตัวอย่างเด็ค' }} />
-      <Stack.Screen name="study/[deckId]" options={{ title: 'เรียน' }} />
+      <Stack.Screen name="folder/[id]" options={{ title: 'Folder' }} />
+      <Stack.Screen name="folder-preview/[id]" options={{ title: 'Folder preview' }} />
+      <Stack.Screen name="deck/[id]" options={{ title: 'Deck' }} />
+      <Stack.Screen name="deck-preview/[id]" options={{ title: 'Deck preview' }} />
+      <Stack.Screen name="study/[deckId]" options={{ title: 'Study' }} />
     </Stack>
   );
 }

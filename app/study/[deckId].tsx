@@ -40,7 +40,7 @@ export default function StudySessionScreen() {
   const { deckId, due } = useLocalSearchParams<{ deckId: string; due?: string }>();
   const dueOnly = due === '1';
 
-  const [title, setTitle] = useState('เรียน');
+  const [title, setTitle] = useState('Study');
   const [order, setOrder] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,11 +180,11 @@ export default function StudySessionScreen() {
         <Stack.Screen options={{ title }} />
         <EmptyState
           icon={dueOnly ? 'check-circle' : 'inbox'}
-          title={dueOnly ? 'เยี่ยม! ทบทวนครบแล้ว' : 'เด็คนี้ยังไม่มีการ์ด'}
+          title={dueOnly ? 'Great! All caught up' : 'This deck has no cards yet'}
           message={
             dueOnly
-              ? 'ตอนนี้ไม่มีการ์ดที่ถึงกำหนดทบทวน กลับมาใหม่ภายหลัง'
-              : 'เพิ่มการ์ดก่อนแล้วค่อยกลับมาเรียน'
+              ? 'No cards are due right now. Check back later.'
+              : 'Add some cards first, then come back to study.'
           }
         />
       </View>
@@ -198,14 +198,14 @@ export default function StudySessionScreen() {
         <ThemedText type="title" style={styles.summaryEmoji}>
           🎉
         </ThemedText>
-        <ThemedText type="subtitle">เรียนจบแล้ว!</ThemedText>
+        <ThemedText type="subtitle">Done!</ThemedText>
         <ThemedText style={[styles.summary, { color: theme.muted }]}>
-          จำได้ {correct} จาก {order.length} ใบ
+          Remembered {correct} of {order.length} cards
         </ThemedText>
         <View style={styles.summaryActions}>
-          <Button label="เริ่มใหม่" onPress={() => start(order)} style={styles.summaryButton} />
+          <Button label="Restart" onPress={() => start(order)} style={styles.summaryButton} />
           <Button
-            label="กลับ"
+            label="Back"
             variant="secondary"
             onPress={() => router.back()}
             style={styles.summaryButton}
@@ -233,12 +233,12 @@ export default function StudySessionScreen() {
                     frontStyle,
                   ]}
                 >
-                  <ThemedText style={[styles.face, { color: theme.muted }]}>คำถาม</ThemedText>
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>Question</ThemedText>
                   <ThemedText type="title" style={styles.cardText}>
                     {current.front}
                   </ThemedText>
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
-                    แตะเพื่อพลิก · ปัดเพื่อให้คะแนน
+                    Tap to flip · swipe to grade
                   </ThemedText>
                 </Animated.View>
                 <Animated.View
@@ -249,23 +249,23 @@ export default function StudySessionScreen() {
                     backStyle,
                   ]}
                 >
-                  <ThemedText style={[styles.face, { color: theme.muted }]}>คำตอบ</ThemedText>
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>Answer</ThemedText>
                   <ThemedText type="title" style={styles.cardText}>
                     {current.back}
                   </ThemedText>
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
-                    แตะเพื่อพลิกกลับ
+                    Tap to flip back
                   </ThemedText>
                 </Animated.View>
 
                 <Animated.View style={[styles.swipeTag, styles.swipeTagRight, yesHintStyle]}>
                   <ThemedText style={[styles.swipeTagText, { color: theme.success }]}>
-                    จำได้
+                    Got it
                   </ThemedText>
                 </Animated.View>
                 <Animated.View style={[styles.swipeTag, styles.swipeTagLeft, noHintStyle]}>
                   <ThemedText style={[styles.swipeTagText, { color: theme.danger }]}>
-                    จำไม่ได้
+                    Forgot
                   </ThemedText>
                 </Animated.View>
               </>
@@ -276,12 +276,12 @@ export default function StudySessionScreen() {
 
       <View style={styles.gradeRow}>
         <Button
-          label="จำไม่ได้"
+          label="Forgot"
           variant="danger"
           onPress={() => advance(false)}
           style={styles.gradeButton}
         />
-        <Button label="จำได้" onPress={() => advance(true)} style={styles.gradeButton} />
+        <Button label="Got it" onPress={() => advance(true)} style={styles.gradeButton} />
       </View>
     </View>
   );

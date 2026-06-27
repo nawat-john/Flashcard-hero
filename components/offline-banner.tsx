@@ -18,7 +18,9 @@ export function OfflineBanner() {
   return (
     <View style={styles.banner}>
       <MaterialIcons name="cloud-off" size={16} color="#fff" />
-      <ThemedText style={styles.text}>ออฟไลน์ — บันทึกไว้ จะซิงค์เมื่อมีอินเทอร์เน็ต</ThemedText>
+      <ThemedText style={styles.text}>
+        Offline — changes saved, will sync when back online
+      </ThemedText>
     </View>
   );
 }

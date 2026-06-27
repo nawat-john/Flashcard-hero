@@ -48,18 +48,18 @@ function DragCardRow({ card, index, total, onEdit, onDelete, onDragEnd }: DragCa
   const isDragging = useSharedValue(false);
 
   const cardMenu = useCallback(() => {
-    Alert.alert('การ์ดนี้', undefined, [
-      { text: 'แก้ไข', onPress: () => onEdit(card) },
+    Alert.alert('Card', undefined, [
+      { text: 'Edit', onPress: () => onEdit(card) },
       {
-        text: 'ลบ',
+        text: 'Delete',
         style: 'destructive',
         onPress: () =>
-          Alert.alert('ลบการ์ดนี้?', undefined, [
-            { text: 'ยกเลิก', style: 'cancel' },
-            { text: 'ลบ', style: 'destructive', onPress: () => onDelete(card) },
+          Alert.alert('Delete this card?', undefined, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => onDelete(card) },
           ]),
       },
-      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }, [card, onEdit, onDelete]);
 
@@ -165,14 +165,14 @@ export default function DeckScreen() {
       await setDeckPublic(deck.id, value);
     } catch (e) {
       setDeck({ ...deck, isPublic: !value }); // revert on failure
-      Alert.alert('อัปเดตไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+      Alert.alert('Update failed', e instanceof Error ? e.message : 'Please try again');
     }
   }
 
   async function handleShare() {
     if (!deck) return;
     const url = Linking.createURL(`/deck-preview/${deck.id}`);
-    await Share.share({ message: `มาเรียน "${deck.title}" กันใน Flashcard Hero!\n${url}` });
+    await Share.share({ message: `Study "${deck.title}" with me on Flashcard Hero!\n${url}` });
   }
 
   async function handleDragEnd(fromIndex: number, toIndex: number) {
@@ -196,18 +196,14 @@ export default function DeckScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen options={{ title: deck?.title ?? 'เด็ค' }} />
+      <Stack.Screen options={{ title: deck?.title ?? 'Deck' }} />
 
       {loading ? (
         <LoadingScreen />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : cards.length === 0 ? (
-        <EmptyState
-          icon="add-card"
-          title="ยังไม่มีการ์ด"
-          message="แตะปุ่ม + เพื่อเพิ่มการ์ดใบแรก"
-        />
+        <EmptyState icon="add-card" title="No cards yet" message="Tap + to add your first card" />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}
@@ -217,32 +213,32 @@ export default function DeckScreen() {
             style={[styles.publishBar, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
             <View style={styles.publishText}>
-              <ThemedText type="defaultSemiBold">เผยแพร่สู่สาธารณะ</ThemedText>
+              <ThemedText type="defaultSemiBold">Publish to public</ThemedText>
               <ThemedText style={[styles.publishHint, { color: theme.muted }]}>
-                {deck?.isPublic ? 'คนอื่นค้นเจอและคัดลอกได้' : 'เห็นเฉพาะคุณ'}
+                {deck?.isPublic ? 'Others can find and copy it' : 'Only visible to you'}
               </ThemedText>
             </View>
             <Switch value={!!deck?.isPublic} onValueChange={handleTogglePublic} />
           </View>
           {deck?.isPublic ? (
-            <Button label="แชร์ลิงก์" variant="secondary" onPress={handleShare} />
+            <Button label="Share link" variant="secondary" onPress={handleShare} />
           ) : null}
           {dueCount > 0 ? (
             <Button
-              label={`ทบทวนที่ถึงกำหนด (${dueCount})`}
+              label={`Review due (${dueCount})`}
               onPress={() =>
                 router.push({ pathname: '/study/[deckId]', params: { deckId, due: '1' } })
               }
             />
           ) : null}
           <Button
-            label={`เริ่มเรียนทั้งหมด (${cards.length} ใบ)`}
+            label={`Study all (${cards.length} cards)`}
             variant={dueCount > 0 ? 'secondary' : 'primary'}
             onPress={() => router.push(`/study/${deckId}`)}
             style={styles.studyButton}
           />
           <ThemedText style={[styles.dragHint, { color: theme.muted }]}>
-            กดค้างเพื่อลากเรียงลำดับ
+            Long-press to drag and reorder
           </ThemedText>
           {cards.map((card, index) => (
             <DragCardRow
@@ -265,7 +261,7 @@ export default function DeckScreen() {
 
       <FormModal
         visible={modal.kind === 'create'}
-        title="เพิ่มการ์ด"
+        title="Add card"
         fields={cardFields()}
         onSubmit={async (values) => {
           await createCard(deckId, values.front, values.back);
@@ -276,7 +272,7 @@ export default function DeckScreen() {
       />
       <FormModal
         visible={modal.kind === 'edit'}
-        title="แก้ไขการ์ด"
+        title="Edit card"
         fields={
           modal.kind === 'edit' ? cardFields(modal.card.front, modal.card.back) : cardFields()
         }
@@ -297,16 +293,16 @@ function cardFields(front = '', back = ''): FormField[] {
   return [
     {
       key: 'front',
-      label: 'ด้านหน้า (คำถาม)',
-      placeholder: 'เช่น apple',
+      label: 'Front (question)',
+      placeholder: 'e.g. apple',
       multiline: true,
       required: true,
       initialValue: front,
     },
     {
       key: 'back',
-      label: 'ด้านหลัง (คำตอบ)',
-      placeholder: 'เช่น แอปเปิล',
+      label: 'Back (answer)',
+      placeholder: 'e.g. a round fruit',
       multiline: true,
       required: true,
       initialValue: back,

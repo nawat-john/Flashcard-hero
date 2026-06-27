@@ -23,7 +23,10 @@ import NetInfo from '@react-native-community/netinfo';
 import { supabase, unwrap } from '@/lib/supabase';
 import type { Card, Deck, Folder, Review } from '@/lib/types';
 
-const STORAGE_KEY = 'flashcard.mirror.v1';
+// Bumped to v2 to discard any write-queue persisted before the folders.is_public
+// migration (a queued folder insert referencing is_public would otherwise wedge
+// the outbox on databases that haven't run phase5.sql yet).
+const STORAGE_KEY = 'flashcard.mirror.v2';
 
 type Mirror = {
   folders: Record<string, Folder>;
@@ -324,10 +327,12 @@ export function mReviewsByCards(cardIds: string[]): Review[] {
 
 export async function insertFolder(folder: Folder): Promise<void> {
   mirror.folders[folder.id] = folder;
+  // Don't send is_public: the DB column defaults to false, and omitting it keeps
+  // basic folder creation working even on a database that predates phase5.sql.
   await commit({
     kind: 'insert',
     table: 'folders',
-    values: { id: folder.id, parent_id: folder.parentId, name: folder.name, is_public: false },
+    values: { id: folder.id, parent_id: folder.parentId, name: folder.name },
   });
 }
 
@@ -366,6 +371,7 @@ export async function deleteFolder(id: string): Promise<void> {
 
 export async function insertDeck(deck: Deck): Promise<void> {
   mirror.decks[deck.id] = deck;
+  // is_public omitted: defaults to false in the DB.
   await commit({
     kind: 'insert',
     table: 'decks',
@@ -374,7 +380,6 @@ export async function insertDeck(deck: Deck): Promise<void> {
       folder_id: deck.folderId,
       title: deck.title,
       description: deck.description,
-      is_public: false,
     },
   });
 }

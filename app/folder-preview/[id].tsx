@@ -30,7 +30,7 @@ export default function FolderPreviewScreen() {
     setLoading(true);
     try {
       const nextFolder = await getFolder(folderId);
-      if (!nextFolder) throw new Error('ไม่พบโฟลเดอร์นี้ หรือไม่ได้เปิดเป็นสาธารณะ');
+      if (!nextFolder) throw new Error('Folder not found or not public');
       const [nextDecks, profile] = await Promise.all([
         listDecks(folderId),
         getProfile(nextFolder.ownerId),
@@ -55,12 +55,12 @@ export default function FolderPreviewScreen() {
     setCopying(true);
     try {
       const newId = await copyFolder(folderId);
-      Alert.alert('เพิ่มเข้าคลังแล้ว', 'คัดลอกโฟลเดอร์มาเป็นของคุณเรียบร้อย', [
-        { text: 'ดูโฟลเดอร์', onPress: () => router.replace(`/folder/${newId}`) },
-        { text: 'ปิด', style: 'cancel' },
+      Alert.alert('Added to library', 'The folder was copied to your library.', [
+        { text: 'View folder', onPress: () => router.replace(`/folder/${newId}`) },
+        { text: 'Close', style: 'cancel' },
       ]);
     } catch (e) {
-      Alert.alert('คัดลอกไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+      Alert.alert('Copy failed', e instanceof Error ? e.message : 'Please try again');
     } finally {
       setCopying(false);
     }
@@ -69,7 +69,7 @@ export default function FolderPreviewScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'ตัวอย่างโฟลเดอร์' }} />
+        <Stack.Screen options={{ title: 'Folder preview' }} />
         <LoadingScreen />
       </View>
     );
@@ -78,7 +78,7 @@ export default function FolderPreviewScreen() {
   if (error || !folder) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'ตัวอย่างโฟลเดอร์' }} />
+        <Stack.Screen options={{ title: 'Folder preview' }} />
         <ErrorState message={error ?? undefined} onRetry={load} />
       </View>
     );
@@ -86,17 +86,17 @@ export default function FolderPreviewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen options={{ title: 'ตัวอย่างโฟลเดอร์' }} />
+      <Stack.Screen options={{ title: 'Folder preview' }} />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="title">{folder.name}</ThemedText>
         <ThemedText style={[styles.meta, { color: theme.muted }]}>
-          โดย {creator ?? 'ไม่ทราบชื่อ'} · {decks.length} เด็ค
+          by {creator ?? 'Unknown'} · {decks.length} decks
         </ThemedText>
 
         {decks.length > 0 ? (
           <>
             <ThemedText type="defaultSemiBold" style={styles.sectionLabel}>
-              เด็คในโฟลเดอร์นี้
+              Decks in this folder
             </ThemedText>
             {decks.map((deck) => (
               <ListRow
@@ -105,7 +105,7 @@ export default function FolderPreviewScreen() {
                 iconColor={theme.success}
                 title={deck.title}
                 subtitle={deck.description ?? undefined}
-                rightText={`${deck.cardCount} ใบ`}
+                rightText={`${deck.cardCount} cards`}
               />
             ))}
           </>
@@ -116,7 +116,7 @@ export default function FolderPreviewScreen() {
         style={[styles.footer, { borderTopColor: theme.border, backgroundColor: theme.background }]}
       >
         <Button
-          label="เพิ่มเข้าคลัง"
+          label="Add to library"
           onPress={handleCopy}
           loading={copying}
           disabled={decks.length === 0}

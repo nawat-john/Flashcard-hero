@@ -31,7 +31,7 @@ export default function DeckPreviewScreen() {
     try {
       const nextDeck = await getDeck(deckId);
       if (!nextDeck) {
-        throw new Error('ไม่พบเด็คนี้ หรือไม่ได้เปิดเป็นสาธารณะ');
+        throw new Error('Deck not found or not public');
       }
       const [nextCards, profile] = await Promise.all([
         listCards(deckId),
@@ -57,12 +57,12 @@ export default function DeckPreviewScreen() {
     setCopying(true);
     try {
       const newId = await copyDeck(deckId);
-      Alert.alert('เพิ่มเข้าคลังแล้ว', 'คัดลอกเด็คมาเป็นของคุณเรียบร้อย', [
-        { text: 'ดูเด็ค', onPress: () => router.replace(`/deck/${newId}`) },
-        { text: 'ปิด', style: 'cancel' },
+      Alert.alert('Added to library', 'The deck was copied to your library.', [
+        { text: 'View deck', onPress: () => router.replace(`/deck/${newId}`) },
+        { text: 'Close', style: 'cancel' },
       ]);
     } catch (e) {
-      Alert.alert('คัดลอกไม่สำเร็จ', e instanceof Error ? e.message : 'ลองอีกครั้ง');
+      Alert.alert('Copy failed', e instanceof Error ? e.message : 'Please try again');
     } finally {
       setCopying(false);
     }
@@ -71,7 +71,7 @@ export default function DeckPreviewScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'ตัวอย่างเด็ค' }} />
+        <Stack.Screen options={{ title: 'Deck preview' }} />
         <LoadingScreen />
       </View>
     );
@@ -80,7 +80,7 @@ export default function DeckPreviewScreen() {
   if (error || !deck) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Stack.Screen options={{ title: 'ตัวอย่างเด็ค' }} />
+        <Stack.Screen options={{ title: 'Deck preview' }} />
         <ErrorState message={error ?? undefined} onRetry={load} />
       </View>
     );
@@ -88,16 +88,16 @@ export default function DeckPreviewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen options={{ title: 'ตัวอย่างเด็ค' }} />
+      <Stack.Screen options={{ title: 'Deck preview' }} />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="title">{deck.title}</ThemedText>
         <ThemedText style={[styles.meta, { color: theme.muted }]}>
-          โดย {creator ?? 'ไม่ทราบชื่อ'} · {cards.length} ใบ
+          by {creator ?? 'Unknown'} · {cards.length} cards
         </ThemedText>
         {deck.description ? <ThemedText style={styles.desc}>{deck.description}</ThemedText> : null}
 
         <ThemedText type="defaultSemiBold" style={styles.previewLabel}>
-          ตัวอย่างการ์ด
+          Card preview
         </ThemedText>
         {cards.map((card, index) => (
           <ListRow
@@ -114,7 +114,7 @@ export default function DeckPreviewScreen() {
         style={[styles.footer, { borderTopColor: theme.border, backgroundColor: theme.background }]}
       >
         <Button
-          label="เพิ่มเข้าคลัง"
+          label="Add to library"
           onPress={handleCopy}
           loading={copying}
           disabled={cards.length === 0}

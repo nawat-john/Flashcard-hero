@@ -63,7 +63,7 @@ export default function DiscoverScreen() {
             onChangeText={setSearch}
             onSubmitEditing={() => load(search)}
             returnKeyType="search"
-            placeholder="ค้นหาเด็คและโฟลเดอร์สาธารณะ"
+            placeholder="Search public decks and folders"
             placeholderTextColor={theme.muted}
             autoCapitalize="none"
             style={[styles.searchInput, { color: theme.text }]}
@@ -78,8 +78,8 @@ export default function DiscoverScreen() {
       ) : isEmpty ? (
         <EmptyState
           icon="explore"
-          title="ยังไม่พบเนื้อหาสาธารณะ"
-          message="ลองเผยแพร่เด็คหรือโฟลเดอร์ของคุณ หรือค้นด้วยคำอื่น"
+          title="No public content found"
+          message="Try publishing a deck or folder, or search for something else"
         />
       ) : (
         <ScrollView
@@ -93,7 +93,7 @@ export default function DiscoverScreen() {
                 type="defaultSemiBold"
                 style={[styles.sectionHeader, { color: theme.muted }]}
               >
-                โฟลเดอร์
+                Folders
               </ThemedText>
               {folders.map((folder) => (
                 <ListRow
@@ -101,8 +101,8 @@ export default function DiscoverScreen() {
                   icon="folder"
                   iconColor={theme.tint}
                   title={folder.name}
-                  subtitle={`โดย ${folder.creatorName ?? 'ไม่ทราบชื่อ'}`}
-                  rightText={`${folder.deckCount} เด็ค`}
+                  subtitle={`by ${folder.creatorName ?? 'Unknown'}`}
+                  rightText={`${folder.deckCount} decks`}
                   onPress={() => router.push(`/folder-preview/${folder.id}` as any)}
                 />
               ))}
@@ -115,7 +115,7 @@ export default function DiscoverScreen() {
                 type="defaultSemiBold"
                 style={[styles.sectionHeader, { color: theme.muted }]}
               >
-                เด็ค
+                Decks
               </ThemedText>
               {decks.map((deck) => (
                 <ListRow
@@ -123,8 +123,8 @@ export default function DiscoverScreen() {
                   icon="public"
                   iconColor={theme.success}
                   title={deck.title}
-                  subtitle={`โดย ${deck.creatorName ?? 'ไม่ทราบชื่อ'}`}
-                  rightText={`${deck.cardCount} ใบ`}
+                  subtitle={`by ${deck.creatorName ?? 'Unknown'}`}
+                  rightText={`${deck.cardCount} cards`}
                   onPress={() => router.push(`/deck-preview/${deck.id}`)}
                 />
               ))}

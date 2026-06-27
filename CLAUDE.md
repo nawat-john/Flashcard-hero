@@ -96,7 +96,7 @@ Phase 4 adds SM-2 spaced repetition computed over `card_reviews` (`due_date` der
 ## Conventions
 
 - Secrets (Supabase keys) go in env files and must not be committed.
-- The plan and its checklists are in Thai; match the language already in use in surrounding files/UI when contributing.
+- **UI language is English.** All user-facing strings (labels, alerts, empty states, placeholders, screen titles) are in English. User-authored content (folder/deck names, card front/back) is free-form Unicode text stored as UTF-8 in Postgres — it accepts any language, so never restrict or transform what the user types. `plan.md` itself is still written in Thai (it's the historical planning doc), but do not add Thai to the app UI.
 - Path alias `@/*` maps to the repo root `./*` (see `tsconfig.json`); prefer it over long relative imports.
 - `AGENTS.md` warns that Expo APIs change between versions — check the versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing Expo-specific code.
 - Typed routes are on (`app.json` → `experiments.typedRoutes`). Route literal types live in `.expo/types/` and are regenerated when the dev server runs; if `tsc` complains a valid route string isn't assignable to `Href`, run `npm start` once to regenerate them.

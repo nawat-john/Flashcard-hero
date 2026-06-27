@@ -6,7 +6,7 @@ import { getFolder } from '@/lib/folders';
 
 export default function FolderScreen() {
   const { id: folderId } = useLocalSearchParams<{ id: string }>();
-  const [title, setTitle] = useState('โฟลเดอร์');
+  const [title, setTitle] = useState('Folder');
 
   useEffect(() => {
     getFolder(folderId).then((folder) => {
