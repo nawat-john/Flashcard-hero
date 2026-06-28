@@ -288,6 +288,7 @@ function folderFields(name = ''): FormField[] {
       placeholder: 'e.g. English',
       required: true,
       initialValue: name,
+      maxLength: 100,
     },
   ];
 }
@@ -300,6 +301,7 @@ function deckFields(title = '', description = ''): FormField[] {
       placeholder: 'e.g. Unit 1 Vocabulary',
       required: true,
       initialValue: title,
+      maxLength: 100,
     },
     {
       key: 'description',
@@ -307,6 +309,7 @@ function deckFields(title = '', description = ''): FormField[] {
       placeholder: 'Short description',
       multiline: true,
       initialValue: description,
+      maxLength: 500,
     },
   ];
 }

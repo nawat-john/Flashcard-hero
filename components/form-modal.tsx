@@ -22,6 +22,7 @@ export type FormField = {
   multiline?: boolean;
   required?: boolean;
   initialValue?: string;
+  maxLength?: number;
 };
 
 type FormModalProps = {
@@ -94,6 +95,7 @@ export function FormModal({
                   placeholder={field.placeholder}
                   placeholderTextColor={theme.muted}
                   multiline={field.multiline}
+                  maxLength={field.maxLength}
                   autoFocus={fields[0]?.key === field.key}
                   style={[
                     styles.input,

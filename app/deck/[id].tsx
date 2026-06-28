@@ -298,6 +298,7 @@ function cardFields(front = '', back = ''): FormField[] {
       multiline: true,
       required: true,
       initialValue: front,
+      maxLength: 2000,
     },
     {
       key: 'back',
@@ -306,6 +307,7 @@ function cardFields(front = '', back = ''): FormField[] {
       multiline: true,
       required: true,
       initialValue: back,
+      maxLength: 2000,
     },
   ];
 }

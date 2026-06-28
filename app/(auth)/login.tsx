@@ -45,7 +45,7 @@ export default function LoginScreen() {
 
   const canSubmit =
     email.trim().length > 0 &&
-    password.length >= 6 &&
+    password.length >= 8 &&
     (mode === 'signIn' || displayName.trim().length > 0);
 
   async function handleSubmit() {
@@ -98,6 +98,7 @@ export default function LoginScreen() {
             onChangeText={setDisplayName}
             placeholder="Display name"
             placeholderTextColor={theme.muted}
+            maxLength={50}
             style={inputStyle}
           />
         ) : null}
@@ -110,14 +111,16 @@ export default function LoginScreen() {
           autoCorrect={false}
           keyboardType="email-address"
           inputMode="email"
+          maxLength={254}
           style={inputStyle}
         />
         <TextInput
           value={password}
           onChangeText={setPassword}
-          placeholder="Password (at least 6 characters)"
+          placeholder="Password (at least 8 characters)"
           placeholderTextColor={theme.muted}
           secureTextEntry
+          maxLength={128}
           style={inputStyle}
         />
 

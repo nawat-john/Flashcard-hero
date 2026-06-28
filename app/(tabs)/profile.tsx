@@ -59,6 +59,7 @@ export default function ProfileScreen() {
             label: 'Display name',
             required: true,
             initialValue: displayName ?? '',
+            maxLength: 50,
           },
         ]}
         onSubmit={async (values) => {
