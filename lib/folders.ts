@@ -23,6 +23,25 @@ function toFolder(row: FolderRow): Folder {
   };
 }
 
+/** All folders owned by the signed-in user, sorted by name (for the folder picker). */
+export async function listAllFolders(): Promise<Folder[]> {
+  await store.ensureLoaded();
+  if (store.isOnline()) {
+    try {
+      const uid = await store.getUserId();
+      let query = supabase.from('folders').select('*').order('name');
+      if (uid) query = query.eq('owner_id', uid);
+      const rows = (unwrap(await query) ?? []) as FolderRow[];
+      const result = rows.map(toFolder);
+      store.cacheFolders(result);
+      return result;
+    } catch {
+      // fall through to mirror
+    }
+  }
+  return store.mAllFolders();
+}
+
 /** Folders directly inside `parentId` (use `null` for the root level). */
 export async function listFolders(parentId: string | null): Promise<Folder[]> {
   await store.ensureLoaded();

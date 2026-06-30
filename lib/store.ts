@@ -82,6 +82,7 @@ function toDeck(row: any): Deck {
     folderId: row.folder_id,
     title: row.title,
     description: row.description,
+    tags: row.tags ?? [],
     isPublic: !!row.is_public,
     createdAt: row.created_at,
   };
@@ -199,18 +200,26 @@ async function runOp(op: Op): Promise<void> {
   }
 }
 
-/** Replays queued writes in order. Stops (and retries later) on any error. */
+/**
+ * Replays queued writes in order. Stops (and retries later) on the first error,
+ * which is how a genuinely-offline device keeps its writes queued. The loop is
+ * NOT gated on the NetInfo `online` flag on purpose: that flag is only a hint
+ * (NetInfo is unreliable in Expo Go and can report offline on a working
+ * connection), so we let the actual request outcome decide. The `flushing`
+ * singleton coalesces concurrent calls.
+ */
 export function flush(): Promise<void> {
   if (flushing) return flushing;
   flushing = (async () => {
     try {
-      while (online && outbox.length > 0) {
+      while (outbox.length > 0) {
         try {
           await runOp(outbox[0]);
-        } catch {
-          // Network hiccup → keep the op queued and retry on the next flush.
-          // (Owned-only writes always satisfy RLS, so a permanent failure that
-          // could wedge the queue is not expected here.)
+        } catch (e) {
+          // A network failure means we're really offline → keep the op queued
+          // and retry on the next flush. Surface the cause so a real server
+          // rejection (RLS / constraint) isn't silently swallowed.
+          console.warn('[store] outbox flush failed', outbox[0], e);
           break;
         }
         outbox.shift();
@@ -223,12 +232,19 @@ export function flush(): Promise<void> {
   return flushing;
 }
 
-/** Applies a mirror mutation's op(s): queue, persist, and flush if online. */
+/**
+ * Applies a mirror mutation's op(s): queue, persist, then push to the server.
+ * We always attempt the flush; when the NetInfo hint says we're online we await
+ * it so callers (and the e2e tests) see the write land, otherwise we fire it in
+ * the background to keep offline writes instant. Either way a failed attempt
+ * just leaves the op queued for the next reconnect.
+ */
 async function commit(op: Op | Op[]): Promise<void> {
   if (Array.isArray(op)) outbox.push(...op);
   else outbox.push(op);
   await persist();
   if (online) await flush();
+  else void flush();
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +286,10 @@ export function cacheReviews(list: Review[]): void {
 // ---------------------------------------------------------------------------
 // Mirror reads (synchronous; call ensureLoaded() first)
 // ---------------------------------------------------------------------------
+
+export function mAllFolders(): Folder[] {
+  return Object.values(mirror.folders).sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export function mFoldersByParent(parentId: string | null): Folder[] {
   return Object.values(mirror.folders)
@@ -372,21 +392,20 @@ export async function deleteFolder(id: string): Promise<void> {
 export async function insertDeck(deck: Deck): Promise<void> {
   mirror.decks[deck.id] = deck;
   // is_public omitted: defaults to false in the DB.
-  await commit({
-    kind: 'insert',
-    table: 'decks',
-    values: {
-      id: deck.id,
-      folder_id: deck.folderId,
-      title: deck.title,
-      description: deck.description,
-    },
-  });
+  // tags omitted when empty so this works on DBs that predate phase6.sql.
+  const values: Record<string, unknown> = {
+    id: deck.id,
+    folder_id: deck.folderId,
+    title: deck.title,
+    description: deck.description,
+  };
+  if (deck.tags.length > 0) values.tags = deck.tags;
+  await commit({ kind: 'insert', table: 'decks', values });
 }
 
 export async function updateDeck(
   id: string,
-  patch: Partial<Pick<Deck, 'title' | 'description' | 'isPublic'>>
+  patch: Partial<Pick<Deck, 'title' | 'description' | 'isPublic' | 'folderId' | 'tags'>>
 ): Promise<void> {
   const cur = mirror.decks[id];
   if (cur) mirror.decks[id] = { ...cur, ...patch };
@@ -394,6 +413,8 @@ export async function updateDeck(
   if (patch.title !== undefined) values.title = patch.title;
   if (patch.description !== undefined) values.description = patch.description;
   if (patch.isPublic !== undefined) values.is_public = patch.isPublic;
+  if (patch.folderId !== undefined) values.folder_id = patch.folderId;
+  if (patch.tags !== undefined) values.tags = patch.tags;
   await commit({ kind: 'update', table: 'decks', match: { id }, values });
 }
 

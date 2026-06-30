@@ -4,6 +4,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { ErrorState } from '@/components/error-state';
+import { FolderPickerModal } from '@/components/folder-picker-modal';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
@@ -25,6 +26,7 @@ export default function FolderPreviewScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  const [pickingFolder, setPickingFolder] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,11 +52,12 @@ export default function FolderPreviewScreen() {
     load();
   }, [load]);
 
-  async function handleCopy() {
+  async function handleCopy(targetParentId: string | null = null) {
     if (copying) return;
+    setPickingFolder(false);
     setCopying(true);
     try {
-      const newId = await copyFolder(folderId);
+      const newId = await copyFolder(folderId, targetParentId);
       Alert.alert('Added to library', 'The folder was copied to your library.', [
         { text: 'View folder', onPress: () => router.replace(`/folder/${newId}`) },
         { text: 'Close', style: 'cancel' },
@@ -117,11 +120,18 @@ export default function FolderPreviewScreen() {
       >
         <Button
           label="Add to library"
-          onPress={handleCopy}
+          onPress={() => setPickingFolder(true)}
           loading={copying}
           disabled={decks.length === 0}
         />
       </View>
+
+      <FolderPickerModal
+        visible={pickingFolder}
+        title="Add folder inside…"
+        onClose={() => setPickingFolder(false)}
+        onSelect={(parentId) => handleCopy(parentId)}
+      />
     </View>
   );
 }

@@ -15,6 +15,7 @@ export type Deck = {
   folderId: string | null;
   title: string;
   description: string | null;
+  tags: string[];
   isPublic: boolean;
   createdAt: string;
 };

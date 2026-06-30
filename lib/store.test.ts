@@ -68,6 +68,7 @@ function mkDeck(overrides: Partial<Deck> = {}): Deck {
     folderId: null,
     title: 'Deck',
     description: null,
+    tags: [],
     isPublic: false,
     createdAt: NOW,
     ...overrides,

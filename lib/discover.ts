@@ -45,6 +45,7 @@ export type PublicDeck = {
   ownerId: string;
   title: string;
   description: string | null;
+  tags: string[];
   createdAt: string;
   creatorName: string | null;
   cardCount: number;
@@ -55,6 +56,7 @@ type PublicDeckRow = {
   owner_id: string;
   title: string;
   description: string | null;
+  tags: string[];
   created_at: string;
   creator_name: string | null;
   card_count: number;
@@ -66,17 +68,18 @@ function toPublicDeck(row: PublicDeckRow): PublicDeck {
     ownerId: row.owner_id,
     title: row.title,
     description: row.description,
+    tags: row.tags ?? [],
     createdAt: row.created_at,
     creatorName: row.creator_name,
     cardCount: row.card_count,
   };
 }
 
-/** Public decks, optionally filtered by a title substring. */
-export async function listPublicDecks(search = ''): Promise<PublicDeck[]> {
+/** Public decks, optionally filtered by title substring and/or tag. */
+export async function listPublicDecks(search = '', filterTag = ''): Promise<PublicDeck[]> {
   const rows =
-    (unwrap(await supabase.rpc('list_public_decks', { search: search.trim() })) as
-      | PublicDeckRow[]
-      | null) ?? [];
+    (unwrap(
+      await supabase.rpc('list_public_decks', { search: search.trim(), filter_tag: filterTag })
+    ) as PublicDeckRow[] | null) ?? [];
   return rows.map(toPublicDeck);
 }

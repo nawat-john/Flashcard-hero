@@ -9,6 +9,7 @@ type DeckRow = {
   folder_id: string | null;
   title: string;
   description: string | null;
+  tags: string[];
   is_public: boolean;
   created_at: string;
 };
@@ -22,6 +23,7 @@ function toDeck(row: DeckRow): Deck {
     folderId: row.folder_id,
     title: row.title,
     description: row.description,
+    tags: row.tags ?? [],
     isPublic: !!row.is_public,
     createdAt: row.created_at,
   };
@@ -104,7 +106,8 @@ export async function getDeck(id: string): Promise<Deck | null> {
 export async function createDeck(
   folderId: string | null,
   title: string,
-  description: string
+  description: string,
+  tags: string[] = []
 ): Promise<string> {
   const id = uuid();
   const uid = (await store.getUserId()) ?? '';
@@ -116,6 +119,7 @@ export async function createDeck(
     folderId,
     title: title.trim(),
     description: trimmed.length > 0 ? trimmed : null,
+    tags,
     isPublic: false,
     createdAt: now,
   };
@@ -123,12 +127,23 @@ export async function createDeck(
   return id;
 }
 
-export async function updateDeck(id: string, title: string, description: string): Promise<void> {
+export async function updateDeck(
+  id: string,
+  title: string,
+  description: string,
+  tags?: string[]
+): Promise<void> {
   const trimmed = description.trim();
   await store.updateDeck(id, {
     title: title.trim(),
     description: trimmed.length > 0 ? trimmed : null,
+    ...(tags !== undefined ? { tags } : {}),
   });
+}
+
+/** Move a deck to a different folder (or to the root when `targetFolderId` is null). */
+export async function moveDeck(id: string, targetFolderId: string | null): Promise<void> {
+  await store.updateDeck(id, { folderId: targetFolderId });
 }
 
 /** Deletes a deck. ON DELETE CASCADE removes its cards. */

@@ -16,9 +16,12 @@ export default function StudyTabScreen() {
   const router = useRouter();
   const [decks, setDecks] = useState<DeckWithCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
       setDecks(await listAllDecks());
       setError(null);
@@ -26,6 +29,7 @@ export default function StudyTabScreen() {
       setError(e instanceof Error ? e.message : 'unknown error');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -35,6 +39,10 @@ export default function StudyTabScreen() {
     }, [load])
   );
 
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />
+  );
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -42,20 +50,24 @@ export default function StudyTabScreen() {
   if (error) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ErrorState message={error} onRetry={load} />
+        <ErrorState message={error} onRetry={() => load()} />
       </View>
     );
   }
 
   if (decks.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView
+        style={{ backgroundColor: theme.background }}
+        contentContainerStyle={styles.empty}
+        refreshControl={refreshControl}
+      >
         <EmptyState
           icon="school"
           title="No decks to study yet"
           message="Create a deck in the Library tab, then come back here to start studying"
         />
-      </View>
+      </ScrollView>
     );
   }
 
@@ -63,7 +75,7 @@ export default function StudyTabScreen() {
     <ScrollView
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
+      refreshControl={refreshControl}
     >
       {decks.map((deck) => (
         <ListRow
@@ -87,5 +99,8 @@ const styles = StyleSheet.create({
   list: {
     padding: Spacing.lg,
     gap: Spacing.md,
+  },
+  empty: {
+    flexGrow: 1,
   },
 });

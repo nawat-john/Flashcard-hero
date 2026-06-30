@@ -21,13 +21,17 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { createCard, deleteCard, listCards, reorderCards, updateCard } from '@/lib/cards';
-import { getDeck, setDeckPublic } from '@/lib/decks';
+import { getDeck, setDeckPublic, updateDeck } from '@/lib/decks';
 import { countDueCards } from '@/lib/reviews';
 import type { Card, Deck } from '@/lib/types';
 
 const ROW_HEIGHT = 64; // approximate height of each ListRow
 
-type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; card: Card };
+type ModalState =
+  | { kind: 'none' }
+  | { kind: 'create' }
+  | { kind: 'edit'; card: Card }
+  | { kind: 'tags' };
 
 // ---------------------------------------------------------------------------
 // Draggable card row
@@ -223,6 +227,22 @@ export default function DeckScreen() {
           {deck?.isPublic ? (
             <Button label="Share link" variant="secondary" onPress={handleShare} />
           ) : null}
+          <View
+            style={[styles.publishBar, { backgroundColor: theme.card, borderColor: theme.border }]}
+          >
+            <View style={styles.publishText}>
+              <ThemedText type="defaultSemiBold">Tags</ThemedText>
+              <ThemedText style={[styles.publishHint, { color: theme.muted }]}>
+                {deck?.tags.length ? deck.tags.map((t) => `#${t}`).join('  ') : 'No tags yet'}
+              </ThemedText>
+            </View>
+            <Button
+              label="Edit"
+              variant="secondary"
+              onPress={() => setModal({ kind: 'tags' })}
+              style={styles.tagsEditBtn}
+            />
+          </View>
           {dueCount > 0 ? (
             <Button
               label={`Review due (${dueCount})`}
@@ -259,6 +279,30 @@ export default function DeckScreen() {
 
       {!loading && !error ? <Fab onPress={() => setModal({ kind: 'create' })} /> : null}
 
+      <FormModal
+        visible={modal.kind === 'tags'}
+        title="Edit tags"
+        fields={[
+          {
+            key: 'tags',
+            label: 'Tags (comma-separated)',
+            placeholder: 'e.g. english, vocabulary',
+            initialValue: deck?.tags.join(', ') ?? '',
+            maxLength: 200,
+          },
+        ]}
+        onSubmit={async (values) => {
+          if (!deck) return;
+          const tags = values.tags
+            .split(',')
+            .map((t) => t.trim().toLowerCase())
+            .filter(Boolean);
+          await updateDeck(deck.id, deck.title, deck.description ?? '', tags);
+          setDeck({ ...deck, tags });
+          closeModal();
+        }}
+        onClose={closeModal}
+      />
       <FormModal
         visible={modal.kind === 'create'}
         title="Add card"
@@ -340,6 +384,9 @@ const styles = StyleSheet.create({
   },
   studyButton: {
     marginBottom: Spacing.sm,
+  },
+  tagsEditBtn: {
+    paddingHorizontal: Spacing.md,
   },
   dragHint: {
     fontSize: 12,

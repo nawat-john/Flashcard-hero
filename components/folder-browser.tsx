@@ -6,6 +6,7 @@ import { Alert, RefreshControl, ScrollView, Share, StyleSheet, View } from 'reac
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Fab } from '@/components/fab';
+import { FolderPickerModal } from '@/components/folder-picker-modal';
 import { FormModal, type FormField } from '@/components/form-modal';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
@@ -20,7 +21,7 @@ import {
   renameFolder,
   shareFolder,
 } from '@/lib/folders';
-import { createDeck, deleteDeck, listDecks, setDeckPublic, updateDeck } from '@/lib/decks';
+import { copyDeck, createDeck, deleteDeck, listDecks, moveDeck, setDeckPublic, updateDeck } from '@/lib/decks';
 import type { DeckWithCount, Folder } from '@/lib/types';
 
 type ModalState =
@@ -28,7 +29,9 @@ type ModalState =
   | { kind: 'folder-create' }
   | { kind: 'folder-rename'; folder: Folder }
   | { kind: 'deck-create' }
-  | { kind: 'deck-edit'; deck: DeckWithCount };
+  | { kind: 'deck-edit'; deck: DeckWithCount }
+  | { kind: 'deck-move'; deck: DeckWithCount }
+  | { kind: 'deck-copy'; deck: DeckWithCount };
 
 export function FolderBrowser({ folderId }: { folderId: string | null }) {
   const theme = useAppTheme();
@@ -38,28 +41,34 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
   const [decks, setDecks] = useState<DeckWithCount[]>([]);
   const [path, setPath] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
-  const load = useCallback(async () => {
-    try {
-      const [nextFolders, nextDecks, nextPath] = await Promise.all([
-        listFolders(folderId),
-        listDecks(folderId),
-        getFolderPath(folderId),
-      ]);
-      setFolders(nextFolders);
-      setDecks(nextDecks);
-      setPath(nextPath);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, [folderId]);
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const [nextFolders, nextDecks, nextPath] = await Promise.all([
+          listFolders(folderId),
+          listDecks(folderId),
+          getFolderPath(folderId),
+        ]);
+        setFolders(nextFolders);
+        setDecks(nextDecks);
+        setPath(nextPath);
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'unknown error');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [folderId]
+  );
 
-  // Reload whenever the screen regains focus (e.g. returning from a child folder).
   useFocusEffect(
     useCallback(() => {
       load();
@@ -159,12 +168,18 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
           load();
         },
       },
+      { text: 'Move to folder', onPress: () => setModal({ kind: 'deck-move', deck }) },
+      { text: 'Copy to folder', onPress: () => setModal({ kind: 'deck-copy', deck }) },
       { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteDeck(deck) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
   const isEmpty = folders.length === 0 && decks.length === 0;
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />
+  );
 
   if (loading) {
     return <LoadingScreen />;
@@ -173,7 +188,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
   if (error) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ErrorState message={error} onRetry={load} />
+        <ErrorState message={error} onRetry={() => load()} />
       </View>
     );
   }
@@ -187,16 +202,18 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       ) : null}
 
       {isEmpty ? (
-        <EmptyState
-          icon="folder-open"
-          title="Nothing here yet"
-          message="Tap + to create your first folder or deck"
-        />
-      ) : (
         <ScrollView
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={refreshControl}
         >
+          <EmptyState
+            icon="folder-open"
+            title="Nothing here yet"
+            message="Tap + to create your first folder or deck"
+          />
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.list} refreshControl={refreshControl}>
           {folders.map((folder) => (
             <ListRow
               key={`folder-${folder.id}`}
@@ -213,7 +230,11 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
               icon="style"
               iconColor={theme.success}
               title={deck.title}
-              subtitle={deck.description ?? undefined}
+              subtitle={
+                deck.tags.length > 0
+                  ? deck.tags.map((t) => `#${t}`).join(' ')
+                  : (deck.description ?? undefined)
+              }
               rightText={`${deck.cardCount} cards${deck.isPublic ? ' · 🌐' : ''}`}
               onPress={() => router.push(`/deck/${deck.id}`)}
               onMorePress={() => deckMenu(deck)}
@@ -224,6 +245,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
 
       <Fab onPress={promptCreate} />
 
+      {/* Text-field modals */}
       <FormModal
         visible={modal.kind === 'folder-create'}
         title="New folder"
@@ -253,7 +275,8 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
         title="New deck"
         fields={deckFields()}
         onSubmit={async (values) => {
-          await createDeck(folderId, values.title, values.description);
+          const tags = parseTags(values.tags);
+          await createDeck(folderId, values.title, values.description, tags);
           closeModal();
           load();
         }}
@@ -264,20 +287,54 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
         title="Edit deck"
         fields={
           modal.kind === 'deck-edit'
-            ? deckFields(modal.deck.title, modal.deck.description ?? '')
+            ? deckFields(modal.deck.title, modal.deck.description ?? '', modal.deck.tags.join(', '))
             : deckFields()
         }
         onSubmit={async (values) => {
           if (modal.kind === 'deck-edit') {
-            await updateDeck(modal.deck.id, values.title, values.description);
+            const tags = parseTags(values.tags);
+            await updateDeck(modal.deck.id, values.title, values.description, tags);
           }
           closeModal();
           load();
         }}
         onClose={closeModal}
       />
+
+      {/* Folder picker modals for move / copy */}
+      <FolderPickerModal
+        visible={modal.kind === 'deck-move'}
+        title="Move deck to…"
+        onClose={closeModal}
+        onSelect={async (targetFolderId) => {
+          if (modal.kind === 'deck-move') {
+            await moveDeck(modal.deck.id, targetFolderId);
+            closeModal();
+            load();
+          }
+        }}
+      />
+      <FolderPickerModal
+        visible={modal.kind === 'deck-copy'}
+        title="Copy deck to…"
+        onClose={closeModal}
+        onSelect={async (targetFolderId) => {
+          if (modal.kind === 'deck-copy') {
+            await copyDeck(modal.deck.id, targetFolderId);
+            closeModal();
+            load();
+          }
+        }}
+      />
     </View>
   );
+}
+
+function parseTags(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function folderFields(name = ''): FormField[] {
@@ -293,7 +350,7 @@ function folderFields(name = ''): FormField[] {
   ];
 }
 
-function deckFields(title = '', description = ''): FormField[] {
+function deckFields(title = '', description = '', tags = ''): FormField[] {
   return [
     {
       key: 'title',
@@ -311,6 +368,13 @@ function deckFields(title = '', description = ''): FormField[] {
       initialValue: description,
       maxLength: 500,
     },
+    {
+      key: 'tags',
+      label: 'Tags (optional, comma-separated)',
+      placeholder: 'e.g. english, vocabulary',
+      initialValue: tags,
+      maxLength: 200,
+    },
   ];
 }
 
@@ -327,5 +391,8 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.md,
     paddingBottom: 96,
+  },
+  emptyContainer: {
+    flexGrow: 1,
   },
 });
