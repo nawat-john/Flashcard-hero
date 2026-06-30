@@ -71,6 +71,8 @@ function toFolder(row: any): Folder {
     parentId: row.parent_id,
     name: row.name,
     isPublic: !!row.is_public,
+    color: row.color ?? null,
+    icon: row.icon ?? null,
     createdAt: row.created_at,
   };
 }
@@ -83,6 +85,11 @@ function toDeck(row: any): Deck {
     title: row.title,
     description: row.description,
     tags: row.tags ?? [],
+    color: row.color ?? null,
+    icon: row.icon ?? null,
+    frontLabel: row.front_label ?? 'Front',
+    backLabel: row.back_label ?? 'Back',
+    studyOrder: row.study_order === 'random' ? 'random' : 'sequential',
     isPublic: !!row.is_public,
     createdAt: row.created_at,
   };
@@ -349,22 +356,24 @@ export async function insertFolder(folder: Folder): Promise<void> {
   mirror.folders[folder.id] = folder;
   // Don't send is_public: the DB column defaults to false, and omitting it keeps
   // basic folder creation working even on a database that predates phase5.sql.
-  await commit({
-    kind: 'insert',
-    table: 'folders',
-    values: { id: folder.id, parent_id: folder.parentId, name: folder.name },
-  });
+  // color/icon omitted when null for backward compat with pre-phase7 DBs.
+  const values: Record<string, unknown> = { id: folder.id, parent_id: folder.parentId, name: folder.name };
+  if (folder.color) values.color = folder.color;
+  if (folder.icon) values.icon = folder.icon;
+  await commit({ kind: 'insert', table: 'folders', values });
 }
 
 export async function updateFolder(
   id: string,
-  patch: Partial<Pick<Folder, 'name' | 'isPublic'>>
+  patch: Partial<Pick<Folder, 'name' | 'isPublic' | 'color' | 'icon'>>
 ): Promise<void> {
   const cur = mirror.folders[id];
   if (cur) mirror.folders[id] = { ...cur, ...patch };
   const values: Record<string, unknown> = {};
   if (patch.name !== undefined) values.name = patch.name;
   if (patch.isPublic !== undefined) values.is_public = patch.isPublic;
+  if ('color' in patch) values.color = patch.color;
+  if ('icon' in patch) values.icon = patch.icon;
   await commit({ kind: 'update', table: 'folders', match: { id }, values });
 }
 
@@ -392,7 +401,7 @@ export async function deleteFolder(id: string): Promise<void> {
 export async function insertDeck(deck: Deck): Promise<void> {
   mirror.decks[deck.id] = deck;
   // is_public omitted: defaults to false in the DB.
-  // tags omitted when empty so this works on DBs that predate phase6.sql.
+  // Optional fields omitted when default so this works on pre-phase6/7 DBs.
   const values: Record<string, unknown> = {
     id: deck.id,
     folder_id: deck.folderId,
@@ -400,12 +409,17 @@ export async function insertDeck(deck: Deck): Promise<void> {
     description: deck.description,
   };
   if (deck.tags.length > 0) values.tags = deck.tags;
+  if (deck.color) values.color = deck.color;
+  if (deck.icon) values.icon = deck.icon;
+  if (deck.frontLabel && deck.frontLabel !== 'Front') values.front_label = deck.frontLabel;
+  if (deck.backLabel && deck.backLabel !== 'Back') values.back_label = deck.backLabel;
+  if (deck.studyOrder !== 'sequential') values.study_order = deck.studyOrder;
   await commit({ kind: 'insert', table: 'decks', values });
 }
 
 export async function updateDeck(
   id: string,
-  patch: Partial<Pick<Deck, 'title' | 'description' | 'isPublic' | 'folderId' | 'tags'>>
+  patch: Partial<Pick<Deck, 'title' | 'description' | 'isPublic' | 'folderId' | 'tags' | 'color' | 'icon' | 'frontLabel' | 'backLabel' | 'studyOrder'>>
 ): Promise<void> {
   const cur = mirror.decks[id];
   if (cur) mirror.decks[id] = { ...cur, ...patch };
@@ -415,6 +429,11 @@ export async function updateDeck(
   if (patch.isPublic !== undefined) values.is_public = patch.isPublic;
   if (patch.folderId !== undefined) values.folder_id = patch.folderId;
   if (patch.tags !== undefined) values.tags = patch.tags;
+  if ('color' in patch) values.color = patch.color;
+  if ('icon' in patch) values.icon = patch.icon;
+  if (patch.frontLabel !== undefined) values.front_label = patch.frontLabel;
+  if (patch.backLabel !== undefined) values.back_label = patch.backLabel;
+  if (patch.studyOrder !== undefined) values.study_order = patch.studyOrder;
   await commit({ kind: 'update', table: 'decks', match: { id }, values });
 }
 

@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -8,6 +8,7 @@ import { useAppTheme } from '@/hooks/use-app-theme';
 type ListRowProps = {
   icon: keyof typeof MaterialIcons.glyphMap;
   iconColor?: string;
+  iconEmoji?: string;
   title: string;
   subtitle?: string;
   rightText?: string;
@@ -18,6 +19,7 @@ type ListRowProps = {
 export function ListRow({
   icon,
   iconColor,
+  iconEmoji,
   title,
   subtitle,
   rightText,
@@ -33,7 +35,11 @@ export function ListRow({
         { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
       ]}
     >
-      <MaterialIcons name={icon} size={26} color={iconColor ?? theme.tint} />
+      {iconEmoji ? (
+        <Text style={styles.emoji}>{iconEmoji}</Text>
+      ) : (
+        <MaterialIcons name={icon} size={26} color={iconColor ?? theme.tint} />
+      )}
       <View style={styles.text}>
         <ThemedText type="defaultSemiBold" numberOfLines={1}>
           {title}
@@ -78,5 +84,10 @@ const styles = StyleSheet.create({
   },
   more: {
     padding: Spacing.xs,
+  },
+  emoji: {
+    fontSize: 22,
+    width: 26,
+    textAlign: 'center',
   },
 });

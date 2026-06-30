@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,13 +15,14 @@ import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { LoadingScreen } from '@/components/loading-screen';
+import { MarkdownText } from '@/components/markdown-text';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { listCards } from '@/lib/cards';
 import { getDeck } from '@/lib/decks';
 import { getDueCards, recordReview } from '@/lib/reviews';
-import type { Card } from '@/lib/types';
+import type { Card, Deck } from '@/lib/types';
 
 const SWIPE_THRESHOLD = 110;
 
@@ -40,8 +41,9 @@ export default function StudySessionScreen() {
   const { deckId, due } = useLocalSearchParams<{ deckId: string; due?: string }>();
   const dueOnly = due === '1';
 
-  const [title, setTitle] = useState('Study');
+  const [deck, setDeck] = useState<Deck | null>(null);
   const [order, setOrder] = useState<Card[]>([]);
+  const rawCards = useRef<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,9 +55,13 @@ export default function StudySessionScreen() {
   const translateX = useSharedValue(0);
   const [showingBack, setShowingBack] = useState(false);
 
+  const frontLabel = deck?.frontLabel ?? 'Front';
+  const backLabel = deck?.backLabel ?? 'Back';
+
   const start = useCallback(
-    (cards: Card[]) => {
-      setOrder(shuffle(cards));
+    (cards: Card[], loadedDeck?: Deck | null) => {
+      const d = loadedDeck !== undefined ? loadedDeck : deck;
+      setOrder(d?.studyOrder === 'random' ? shuffle(cards) : cards);
       setIndex(0);
       setCorrect(0);
       setFinished(false);
@@ -63,18 +69,19 @@ export default function StudySessionScreen() {
       flip.value = 0;
       translateX.value = 0;
     },
-    [flip, translateX]
+    [deck, flip, translateX]
   );
 
   const loadSession = useCallback(async () => {
     setLoading(true);
     try {
-      const [deck, cards] = await Promise.all([
+      const [loadedDeck, cards] = await Promise.all([
         getDeck(deckId),
         dueOnly ? getDueCards(deckId) : listCards(deckId),
       ]);
-      if (deck) setTitle(deck.title);
-      start(cards);
+      setDeck(loadedDeck);
+      rawCards.current = cards;
+      start(cards, loadedDeck);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'unknown error');
@@ -155,6 +162,7 @@ export default function StudySessionScreen() {
     () => (order.length > 0 ? `${index + 1} / ${order.length}` : ''),
     [index, order.length]
   );
+  const title = deck?.title ?? 'Study';
 
   if (loading) {
     return (
@@ -203,7 +211,11 @@ export default function StudySessionScreen() {
           Remembered {correct} of {order.length} cards
         </ThemedText>
         <View style={styles.summaryActions}>
-          <Button label="Restart" onPress={() => start(order)} style={styles.summaryButton} />
+          <Button
+            label="Restart"
+            onPress={() => start(rawCards.current)}
+            style={styles.summaryButton}
+          />
           <Button
             label="Back"
             variant="secondary"
@@ -233,10 +245,10 @@ export default function StudySessionScreen() {
                     frontStyle,
                   ]}
                 >
-                  <ThemedText style={[styles.face, { color: theme.muted }]}>Question</ThemedText>
-                  <ThemedText type="title" style={styles.cardText}>
-                    {current.front}
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>
+                    {frontLabel}
                   </ThemedText>
+                  <MarkdownText content={current.front} style={styles.cardText} />
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
                     Tap to flip · swipe to grade
                   </ThemedText>
@@ -249,10 +261,10 @@ export default function StudySessionScreen() {
                     backStyle,
                   ]}
                 >
-                  <ThemedText style={[styles.face, { color: theme.muted }]}>Answer</ThemedText>
-                  <ThemedText type="title" style={styles.cardText}>
-                    {current.back}
+                  <ThemedText style={[styles.face, { color: theme.muted }]}>
+                    {backLabel}
                   </ThemedText>
+                  <MarkdownText content={current.back} style={styles.cardText} />
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
                     Tap to flip back
                   </ThemedText>
@@ -324,6 +336,9 @@ const styles = StyleSheet.create({
   },
   cardText: {
     textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 28,
+    lineHeight: 36,
   },
   face: {
     position: 'absolute',

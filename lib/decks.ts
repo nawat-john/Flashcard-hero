@@ -10,6 +10,11 @@ type DeckRow = {
   title: string;
   description: string | null;
   tags: string[];
+  color: string | null;
+  icon: string | null;
+  front_label: string;
+  back_label: string;
+  study_order: string;
   is_public: boolean;
   created_at: string;
 };
@@ -24,6 +29,11 @@ function toDeck(row: DeckRow): Deck {
     title: row.title,
     description: row.description,
     tags: row.tags ?? [],
+    color: row.color ?? null,
+    icon: row.icon ?? null,
+    frontLabel: row.front_label ?? 'Front',
+    backLabel: row.back_label ?? 'Back',
+    studyOrder: row.study_order === 'random' ? 'random' : 'sequential',
     isPublic: !!row.is_public,
     createdAt: row.created_at,
   };
@@ -120,6 +130,11 @@ export async function createDeck(
     title: title.trim(),
     description: trimmed.length > 0 ? trimmed : null,
     tags,
+    color: null,
+    icon: null,
+    frontLabel: 'Front',
+    backLabel: 'Back',
+    studyOrder: 'sequential',
     isPublic: false,
     createdAt: now,
   };
@@ -127,18 +142,31 @@ export async function createDeck(
   return id;
 }
 
-export async function updateDeck(
-  id: string,
-  title: string,
-  description: string,
-  tags?: string[]
-): Promise<void> {
-  const trimmed = description.trim();
-  await store.updateDeck(id, {
-    title: title.trim(),
-    description: trimmed.length > 0 ? trimmed : null,
-    ...(tags !== undefined ? { tags } : {}),
-  });
+export type DeckPatch = Partial<{
+  title: string;
+  description: string;
+  tags: string[];
+  color: string | null;
+  icon: string | null;
+  frontLabel: string;
+  backLabel: string;
+  studyOrder: 'sequential' | 'random';
+}>;
+
+export async function updateDeck(id: string, patch: DeckPatch): Promise<void> {
+  const storePatch: Partial<Pick<Deck, 'title' | 'description' | 'tags' | 'color' | 'icon' | 'frontLabel' | 'backLabel' | 'studyOrder'>> = {};
+  if (patch.title !== undefined) storePatch.title = patch.title.trim();
+  if (patch.description !== undefined) {
+    const trimmed = patch.description.trim();
+    storePatch.description = trimmed.length > 0 ? trimmed : null;
+  }
+  if (patch.tags !== undefined) storePatch.tags = patch.tags;
+  if ('color' in patch) storePatch.color = patch.color;
+  if ('icon' in patch) storePatch.icon = patch.icon;
+  if (patch.frontLabel !== undefined) storePatch.frontLabel = patch.frontLabel;
+  if (patch.backLabel !== undefined) storePatch.backLabel = patch.backLabel;
+  if (patch.studyOrder !== undefined) storePatch.studyOrder = patch.studyOrder;
+  await store.updateDeck(id, storePatch);
 }
 
 /** Move a deck to a different folder (or to the root when `targetFolderId` is null). */

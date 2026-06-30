@@ -6,6 +6,8 @@ export type Folder = {
   parentId: string | null;
   name: string;
   isPublic: boolean;
+  color: string | null;
+  icon: string | null;
   createdAt: string;
 };
 
@@ -16,6 +18,11 @@ export type Deck = {
   title: string;
   description: string | null;
   tags: string[];
+  color: string | null;
+  icon: string | null;
+  frontLabel: string;
+  backLabel: string;
+  studyOrder: 'sequential' | 'random';
   isPublic: boolean;
   createdAt: string;
 };

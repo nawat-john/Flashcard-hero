@@ -14,14 +14,15 @@ import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { ErrorState } from '@/components/error-state';
 import { Fab } from '@/components/fab';
-import { FormModal, type FormField } from '@/components/form-modal';
+import { FormModal } from '@/components/form-modal';
+import type { FormField } from '@/components/form-modal';
 import { ListRow } from '@/components/list-row';
 import { LoadingScreen } from '@/components/loading-screen';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { createCard, deleteCard, listCards, reorderCards, updateCard } from '@/lib/cards';
-import { getDeck, setDeckPublic, updateDeck } from '@/lib/decks';
+import { getDeck, setDeckPublic, updateDeck, type DeckPatch } from '@/lib/decks';
 import { countDueCards } from '@/lib/reviews';
 import type { Card, Deck } from '@/lib/types';
 
@@ -31,7 +32,7 @@ type ModalState =
   | { kind: 'none' }
   | { kind: 'create' }
   | { kind: 'edit'; card: Card }
-  | { kind: 'tags' };
+  | { kind: 'config' };
 
 // ---------------------------------------------------------------------------
 // Draggable card row
@@ -231,15 +232,23 @@ export default function DeckScreen() {
             style={[styles.publishBar, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
             <View style={styles.publishText}>
-              <ThemedText type="defaultSemiBold">Tags</ThemedText>
+              <ThemedText type="defaultSemiBold">Deck settings</ThemedText>
               <ThemedText style={[styles.publishHint, { color: theme.muted }]}>
-                {deck?.tags.length ? deck.tags.map((t) => `#${t}`).join('  ') : 'No tags yet'}
+                {[
+                  deck?.tags.length ? deck.tags.map((t) => `#${t}`).join(' ') : null,
+                  deck?.frontLabel && deck.frontLabel !== 'Front'
+                    ? `${deck.frontLabel} / ${deck.backLabel}`
+                    : null,
+                  deck?.studyOrder === 'random' ? 'Random order' : null,
+                ]
+                  .filter(Boolean)
+                  .join('  ·  ') || 'Tags, labels, study order'}
               </ThemedText>
             </View>
             <Button
               label="Edit"
               variant="secondary"
-              onPress={() => setModal({ kind: 'tags' })}
+              onPress={() => setModal({ kind: 'config' })}
               style={styles.tagsEditBtn}
             />
           </View>
@@ -280,25 +289,25 @@ export default function DeckScreen() {
       {!loading && !error ? <Fab onPress={() => setModal({ kind: 'create' })} /> : null}
 
       <FormModal
-        visible={modal.kind === 'tags'}
-        title="Edit tags"
-        fields={[
-          {
-            key: 'tags',
-            label: 'Tags (comma-separated)',
-            placeholder: 'e.g. english, vocabulary',
-            initialValue: deck?.tags.join(', ') ?? '',
-            maxLength: 200,
-          },
-        ]}
+        visible={modal.kind === 'config'}
+        title="Deck settings"
+        fields={deckConfigFields(deck ?? undefined)}
         onSubmit={async (values) => {
           if (!deck) return;
           const tags = values.tags
             .split(',')
             .map((t) => t.trim().toLowerCase())
             .filter(Boolean);
-          await updateDeck(deck.id, deck.title, deck.description ?? '', tags);
-          setDeck({ ...deck, tags });
+          const patch: DeckPatch = {
+            tags,
+            icon: values.icon.trim() || null,
+            color: values.color || null,
+            frontLabel: values.frontLabel.trim() || 'Front',
+            backLabel: values.backLabel.trim() || 'Back',
+            studyOrder: values.studyOrder === 'random' ? 'random' : 'sequential',
+          };
+          await updateDeck(deck.id, patch);
+          setDeck({ ...deck, ...patch, tags } as typeof deck);
           closeModal();
         }}
         onClose={closeModal}
@@ -331,6 +340,55 @@ export default function DeckScreen() {
       />
     </View>
   );
+}
+
+function deckConfigFields(deck?: { tags: string[]; icon: string | null; color: string | null; frontLabel: string; backLabel: string; studyOrder: string }): FormField[] {
+  return [
+    {
+      key: 'tags',
+      label: 'Tags (comma-separated)',
+      placeholder: 'e.g. english, vocabulary',
+      initialValue: deck?.tags.join(', ') ?? '',
+      maxLength: 200,
+    },
+    {
+      key: 'icon',
+      label: 'Icon (emoji, optional)',
+      placeholder: 'e.g. 🃏',
+      initialValue: deck?.icon ?? '',
+      maxLength: 4,
+    },
+    {
+      key: 'color',
+      label: 'Color',
+      type: 'color' as const,
+      initialValue: deck?.color ?? '',
+    },
+    {
+      key: 'frontLabel',
+      label: 'Front side label (default: Front)',
+      placeholder: 'e.g. Word, Question, Term',
+      initialValue: deck?.frontLabel && deck.frontLabel !== 'Front' ? deck.frontLabel : '',
+      maxLength: 30,
+    },
+    {
+      key: 'backLabel',
+      label: 'Back side label (default: Back)',
+      placeholder: 'e.g. Definition, Answer, Translation',
+      initialValue: deck?.backLabel && deck.backLabel !== 'Back' ? deck.backLabel : '',
+      maxLength: 30,
+    },
+    {
+      key: 'studyOrder',
+      label: 'Study order',
+      type: 'select' as const,
+      initialValue: deck?.studyOrder ?? 'sequential',
+      options: [
+        { value: 'sequential', label: 'In order' },
+        { value: 'random', label: 'Random' },
+      ],
+    },
+  ];
 }
 
 function cardFields(front = '', back = ''): FormField[] {

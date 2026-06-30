@@ -9,6 +9,8 @@ type FolderRow = {
   parent_id: string | null;
   name: string;
   is_public: boolean;
+  color: string | null;
+  icon: string | null;
   created_at: string;
 };
 
@@ -19,6 +21,8 @@ function toFolder(row: FolderRow): Folder {
     parentId: row.parent_id,
     name: row.name,
     isPublic: !!row.is_public,
+    color: row.color ?? null,
+    icon: row.icon ?? null,
     createdAt: row.created_at,
   };
 }
@@ -109,6 +113,8 @@ export async function createFolder(parentId: string | null, name: string): Promi
     parentId,
     name: name.trim(),
     isPublic: false,
+    color: null,
+    icon: null,
     createdAt: now,
   };
   await store.insertFolder(folder);
@@ -117,6 +123,17 @@ export async function createFolder(parentId: string | null, name: string): Promi
 
 export async function renameFolder(id: string, name: string): Promise<void> {
   await store.updateFolder(id, { name: name.trim() });
+}
+
+export async function updateFolder(
+  id: string,
+  patch: { name?: string; color?: string | null; icon?: string | null }
+): Promise<void> {
+  const storePatch: Partial<Pick<Folder, 'name' | 'color' | 'icon'>> = {};
+  if (patch.name !== undefined) storePatch.name = patch.name.trim();
+  if ('color' in patch) storePatch.color = patch.color;
+  if ('icon' in patch) storePatch.icon = patch.icon;
+  await store.updateFolder(id, storePatch);
 }
 
 /** Deletes a folder. ON DELETE CASCADE removes nested folders, decks and cards. */

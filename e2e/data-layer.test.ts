@@ -161,7 +161,7 @@ describe_e2e('Data layer e2e', () => {
     });
 
     it('updates the deck title and description', async () => {
-      await updateDeck(deckId, `${E2E} Deck Updated`, 'New description');
+      await updateDeck(deckId, { title: `${E2E} Deck Updated`, description: 'New description' });
       const decks = await listAllDecks();
       const found = decks.find((d) => d.id === deckId);
       expect(found?.title).toBe(`${E2E} Deck Updated`);

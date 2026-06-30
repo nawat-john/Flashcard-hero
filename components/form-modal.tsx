@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -18,12 +19,27 @@ import { useAppTheme } from '@/hooks/use-app-theme';
 export type FormField = {
   key: string;
   label: string;
+  type?: 'text' | 'color' | 'select';
   placeholder?: string;
   multiline?: boolean;
   required?: boolean;
   initialValue?: string;
   maxLength?: number;
+  options?: { value: string; label: string }[];
 };
+
+const PRESET_COLORS: { label: string; value: string }[] = [
+  { label: 'Default', value: '' },
+  { label: 'Red', value: '#e74c3c' },
+  { label: 'Orange', value: '#e67e22' },
+  { label: 'Yellow', value: '#f1c40f' },
+  { label: 'Green', value: '#27ae60' },
+  { label: 'Teal', value: '#1abc9c' },
+  { label: 'Blue', value: '#3498db' },
+  { label: 'Purple', value: '#9b59b6' },
+  { label: 'Pink', value: '#e91e63' },
+  { label: 'Brown', value: '#795548' },
+];
 
 type FormModalProps = {
   visible: boolean;
@@ -61,7 +77,10 @@ export function FormModal({
   }, [visible]);
 
   const missingRequired = fields.some(
-    (field) => field.required && (values[field.key] ?? '').trim().length === 0
+    (field) =>
+      field.required &&
+      (!field.type || field.type === 'text') &&
+      (values[field.key] ?? '').trim().length === 0
   );
 
   async function handleSubmit() {
@@ -74,6 +93,10 @@ export function FormModal({
     }
   }
 
+  function setValue(key: string, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -84,31 +107,108 @@ export function FormModal({
         <View style={[styles.sheet, { backgroundColor: theme.card }]}>
           <ThemedText type="subtitle">{title}</ThemedText>
           <ScrollView keyboardShouldPersistTaps="handled" style={styles.fields}>
-            {fields.map((field) => (
-              <View key={field.key} style={styles.field}>
-                <ThemedText style={[styles.fieldLabel, { color: theme.muted }]}>
-                  {field.label}
-                </ThemedText>
-                <TextInput
-                  value={values[field.key]}
-                  onChangeText={(text) => setValues((prev) => ({ ...prev, [field.key]: text }))}
-                  placeholder={field.placeholder}
-                  placeholderTextColor={theme.muted}
-                  multiline={field.multiline}
-                  maxLength={field.maxLength}
-                  autoFocus={fields[0]?.key === field.key}
-                  style={[
-                    styles.input,
-                    field.multiline && styles.inputMultiline,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                />
-              </View>
-            ))}
+            {fields.map((field) => {
+              const fieldType = field.type ?? 'text';
+
+              if (fieldType === 'color') {
+                const current = values[field.key] ?? '';
+                return (
+                  <View key={field.key} style={styles.field}>
+                    <ThemedText style={[styles.fieldLabel, { color: theme.muted }]}>
+                      {field.label}
+                    </ThemedText>
+                    <View style={styles.swatchRow}>
+                      {PRESET_COLORS.map((c) => {
+                        const selected = current === c.value;
+                        const bg = c.value || theme.surface;
+                        return (
+                          <Pressable
+                            key={c.value || 'default'}
+                            onPress={() => setValue(field.key, c.value)}
+                            style={[
+                              styles.swatch,
+                              { backgroundColor: bg, borderColor: selected ? theme.text : theme.border },
+                              selected && styles.swatchSelected,
+                            ]}
+                          >
+                            {selected && (
+                              <Text style={[styles.swatchCheck, { color: c.value ? '#fff' : theme.text }]}>
+                                ✓
+                              </Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              }
+
+              if (fieldType === 'select') {
+                const current = values[field.key] ?? '';
+                return (
+                  <View key={field.key} style={styles.field}>
+                    <ThemedText style={[styles.fieldLabel, { color: theme.muted }]}>
+                      {field.label}
+                    </ThemedText>
+                    <View style={styles.selectRow}>
+                      {(field.options ?? []).map((opt) => {
+                        const active = current === opt.value;
+                        return (
+                          <Pressable
+                            key={opt.value}
+                            onPress={() => setValue(field.key, opt.value)}
+                            style={[
+                              styles.selectChip,
+                              {
+                                backgroundColor: active ? theme.tint : theme.surface,
+                                borderColor: active ? theme.tint : theme.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.selectChipLabel,
+                                { color: active ? '#fff' : theme.text },
+                              ]}
+                            >
+                              {opt.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              }
+
+              // Default: text input
+              return (
+                <View key={field.key} style={styles.field}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.muted }]}>
+                    {field.label}
+                  </ThemedText>
+                  <TextInput
+                    value={values[field.key]}
+                    onChangeText={(text) => setValue(field.key, text)}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={theme.muted}
+                    multiline={field.multiline}
+                    maxLength={field.maxLength}
+                    autoFocus={fields[0]?.key === field.key}
+                    style={[
+                      styles.input,
+                      field.multiline && styles.inputMultiline,
+                      {
+                        color: theme.text,
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  />
+                </View>
+              );
+            })}
           </ScrollView>
           <View style={styles.actions}>
             <Button label="Cancel" variant="secondary" onPress={onClose} style={styles.action} />
@@ -137,7 +237,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     gap: Spacing.md,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   fields: {
     flexGrow: 0,
@@ -159,6 +259,41 @@ const styles = StyleSheet.create({
   inputMultiline: {
     minHeight: 96,
     textAlignVertical: 'top',
+  },
+  swatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  swatch: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchSelected: {
+    borderWidth: 3,
+  },
+  swatchCheck: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  selectRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  selectChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  selectChipLabel: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   actions: {
     flexDirection: 'row',

@@ -18,8 +18,8 @@ import {
   deleteFolder,
   getFolderPath,
   listFolders,
-  renameFolder,
   shareFolder,
+  updateFolder,
 } from '@/lib/folders';
 import { copyDeck, createDeck, deleteDeck, listDecks, moveDeck, setDeckPublic, updateDeck } from '@/lib/decks';
 import type { DeckWithCount, Folder } from '@/lib/types';
@@ -135,7 +135,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
 
   function folderMenu(folder: Folder) {
     Alert.alert(folder.name, folder.isPublic ? 'Status: Public' : 'Status: Private', [
-      { text: 'Rename', onPress: () => setModal({ kind: 'folder-rename', folder }) },
+      { text: 'Edit folder', onPress: () => setModal({ kind: 'folder-rename', folder }) },
       {
         text: folder.isPublic ? 'Unpublish folder' : 'Publish folder',
         onPress: () => handleShareFolder(folder),
@@ -218,6 +218,8 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
             <ListRow
               key={`folder-${folder.id}`}
               icon="folder"
+              iconColor={folder.color ?? theme.tint}
+              iconEmoji={folder.icon ?? undefined}
               title={folder.name}
               rightText={folder.isPublic ? '🌐' : undefined}
               onPress={() => router.push(`/folder/${folder.id}`)}
@@ -228,7 +230,8 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
             <ListRow
               key={`deck-${deck.id}`}
               icon="style"
-              iconColor={theme.success}
+              iconColor={deck.color ?? theme.success}
+              iconEmoji={deck.icon ?? undefined}
               title={deck.title}
               subtitle={
                 deck.tags.length > 0
@@ -259,11 +262,19 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       />
       <FormModal
         visible={modal.kind === 'folder-rename'}
-        title="Rename folder"
-        fields={folderFields(modal.kind === 'folder-rename' ? modal.folder.name : '')}
+        title="Edit folder"
+        fields={
+          modal.kind === 'folder-rename'
+            ? folderFields(modal.folder.name, modal.folder.icon ?? '', modal.folder.color ?? '')
+            : folderFields()
+        }
         onSubmit={async (values) => {
           if (modal.kind === 'folder-rename') {
-            await renameFolder(modal.folder.id, values.name);
+            await updateFolder(modal.folder.id, {
+              name: values.name,
+              icon: values.icon.trim() || null,
+              color: values.color || null,
+            });
           }
           closeModal();
           load();
@@ -273,7 +284,7 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
       <FormModal
         visible={modal.kind === 'deck-create'}
         title="New deck"
-        fields={deckFields()}
+        fields={deckCreateFields()}
         onSubmit={async (values) => {
           const tags = parseTags(values.tags);
           await createDeck(folderId, values.title, values.description, tags);
@@ -287,13 +298,21 @@ export function FolderBrowser({ folderId }: { folderId: string | null }) {
         title="Edit deck"
         fields={
           modal.kind === 'deck-edit'
-            ? deckFields(modal.deck.title, modal.deck.description ?? '', modal.deck.tags.join(', '))
+            ? deckFields(modal.deck)
             : deckFields()
         }
         onSubmit={async (values) => {
           if (modal.kind === 'deck-edit') {
-            const tags = parseTags(values.tags);
-            await updateDeck(modal.deck.id, values.title, values.description, tags);
+            await updateDeck(modal.deck.id, {
+              title: values.title,
+              description: values.description,
+              tags: parseTags(values.tags),
+              icon: values.icon.trim() || null,
+              color: values.color || null,
+              frontLabel: values.frontLabel.trim() || 'Front',
+              backLabel: values.backLabel.trim() || 'Back',
+              studyOrder: values.studyOrder === 'random' ? 'random' : 'sequential',
+            });
           }
           closeModal();
           load();
@@ -337,7 +356,7 @@ function parseTags(raw: string): string[] {
     .filter(Boolean);
 }
 
-function folderFields(name = ''): FormField[] {
+function folderFields(name = '', icon = '', color = ''): FormField[] {
   return [
     {
       key: 'name',
@@ -347,17 +366,29 @@ function folderFields(name = ''): FormField[] {
       initialValue: name,
       maxLength: 100,
     },
+    {
+      key: 'icon',
+      label: 'Icon (emoji, optional)',
+      placeholder: 'e.g. 📚',
+      initialValue: icon,
+      maxLength: 4,
+    },
+    {
+      key: 'color',
+      label: 'Color',
+      type: 'color',
+      initialValue: color,
+    },
   ];
 }
 
-function deckFields(title = '', description = '', tags = ''): FormField[] {
+function deckCreateFields(): FormField[] {
   return [
     {
       key: 'title',
       label: 'Deck title',
       placeholder: 'e.g. Unit 1 Vocabulary',
       required: true,
-      initialValue: title,
       maxLength: 100,
     },
     {
@@ -365,15 +396,78 @@ function deckFields(title = '', description = '', tags = ''): FormField[] {
       label: 'Description (optional)',
       placeholder: 'Short description',
       multiline: true,
-      initialValue: description,
       maxLength: 500,
     },
     {
       key: 'tags',
       label: 'Tags (optional, comma-separated)',
       placeholder: 'e.g. english, vocabulary',
-      initialValue: tags,
       maxLength: 200,
+    },
+  ];
+}
+
+function deckFields(deck?: DeckWithCount): FormField[] {
+  return [
+    {
+      key: 'title',
+      label: 'Deck title',
+      placeholder: 'e.g. Unit 1 Vocabulary',
+      required: true,
+      initialValue: deck?.title ?? '',
+      maxLength: 100,
+    },
+    {
+      key: 'description',
+      label: 'Description (optional)',
+      placeholder: 'Short description',
+      multiline: true,
+      initialValue: deck?.description ?? '',
+      maxLength: 500,
+    },
+    {
+      key: 'tags',
+      label: 'Tags (optional, comma-separated)',
+      placeholder: 'e.g. english, vocabulary',
+      initialValue: deck?.tags.join(', ') ?? '',
+      maxLength: 200,
+    },
+    {
+      key: 'icon',
+      label: 'Icon (emoji, optional)',
+      placeholder: 'e.g. 🃏',
+      initialValue: deck?.icon ?? '',
+      maxLength: 4,
+    },
+    {
+      key: 'color',
+      label: 'Color',
+      type: 'color',
+      initialValue: deck?.color ?? '',
+    },
+    {
+      key: 'frontLabel',
+      label: 'Front side label (default: Front)',
+      placeholder: 'e.g. Word, Question, Term',
+      initialValue: deck?.frontLabel && deck.frontLabel !== 'Front' ? deck.frontLabel : '',
+      maxLength: 30,
+    },
+    {
+      key: 'backLabel',
+      label: 'Back side label (default: Back)',
+      placeholder: 'e.g. Definition, Answer, Translation',
+      initialValue: deck?.backLabel && deck.backLabel !== 'Back' ? deck.backLabel : '',
+      maxLength: 30,
+    },
+    {
+      key: 'studyOrder',
+      label: 'Study order',
+      type: 'select',
+      initialValue: deck?.studyOrder ?? 'sequential',
+      options: [
+        { value: 'sequential', label: 'In order' },
+        { value: 'random', label: 'Random' },
+      ],
     },
   ];
 }
