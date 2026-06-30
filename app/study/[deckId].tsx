@@ -22,6 +22,12 @@ import { useAppTheme } from '@/hooks/use-app-theme';
 import { listCards } from '@/lib/cards';
 import { getDeck } from '@/lib/decks';
 import { getDueCards, recordReview } from '@/lib/reviews';
+import {
+  getStudyPrefs,
+  loadStudyPrefs,
+  subscribeStudyPrefs,
+  type StudyPrefs,
+} from '@/lib/study-preference';
 import type { Card, Deck } from '@/lib/types';
 
 const SWIPE_THRESHOLD = 110;
@@ -46,6 +52,12 @@ export default function StudySessionScreen() {
   const rawCards = useRef<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [studyPrefs, setStudyPrefsState] = useState<StudyPrefs>(getStudyPrefs());
+
+  useEffect(() => {
+    loadStudyPrefs().then(setStudyPrefsState);
+    return subscribeStudyPrefs(setStudyPrefsState);
+  }, []);
 
   const [index, setIndex] = useState(0);
   const [correct, setCorrect] = useState(0);
@@ -61,7 +73,8 @@ export default function StudySessionScreen() {
   const start = useCallback(
     (cards: Card[], loadedDeck?: Deck | null) => {
       const d = loadedDeck !== undefined ? loadedDeck : deck;
-      setOrder(d?.studyOrder === 'random' ? shuffle(cards) : cards);
+      const effectiveOrder = d?.studyOrder ?? studyPrefs.defaultStudyOrder;
+      setOrder(effectiveOrder === 'random' ? shuffle(cards) : cards);
       setIndex(0);
       setCorrect(0);
       setFinished(false);
@@ -157,6 +170,14 @@ export default function StudySessionScreen() {
     [advance, translateX]
   );
 
+  const cardTextStyle = useMemo(
+    () => ({
+      ...styles.cardText,
+      ...(studyPrefs.cardFontSize === 'large' ? styles.cardTextLarge : {}),
+    }),
+    [studyPrefs.cardFontSize]
+  );
+
   const current = order[index];
   const progress = useMemo(
     () => (order.length > 0 ? `${index + 1} / ${order.length}` : ''),
@@ -248,7 +269,7 @@ export default function StudySessionScreen() {
                   <ThemedText style={[styles.face, { color: theme.muted }]}>
                     {frontLabel}
                   </ThemedText>
-                  <MarkdownText content={current.front} style={styles.cardText} />
+                  <MarkdownText content={current.front} style={cardTextStyle} />
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
                     Tap to flip · swipe to grade
                   </ThemedText>
@@ -264,7 +285,7 @@ export default function StudySessionScreen() {
                   <ThemedText style={[styles.face, { color: theme.muted }]}>
                     {backLabel}
                   </ThemedText>
-                  <MarkdownText content={current.back} style={styles.cardText} />
+                  <MarkdownText content={current.back} style={cardTextStyle} />
                   <ThemedText style={[styles.hint, { color: theme.muted }]}>
                     Tap to flip back
                   </ThemedText>
@@ -339,6 +360,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 28,
     lineHeight: 36,
+  },
+  cardTextLarge: {
+    fontSize: 38,
+    lineHeight: 48,
   },
   face: {
     position: 'absolute',

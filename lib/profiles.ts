@@ -24,3 +24,8 @@ export async function getProfile(id: string): Promise<Profile | null> {
 export async function updateDisplayName(id: string, displayName: string): Promise<void> {
   unwrap(await supabase.from('profiles').update({ display_name: displayName.trim() }).eq('id', id));
 }
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw error;
+}

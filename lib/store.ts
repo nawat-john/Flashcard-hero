@@ -348,6 +348,29 @@ export function mReviewsByCards(cardIds: string[]): Review[] {
   return cardIds.map((id) => mirror.reviews[id]).filter(Boolean) as Review[];
 }
 
+export function mTotalDecks(): number {
+  return Object.keys(mirror.decks).length;
+}
+
+export function mTotalCards(): number {
+  return Object.keys(mirror.cards).length;
+}
+
+export function mTotalReviews(): number {
+  return Object.keys(mirror.reviews).length;
+}
+
+export function mPendingCount(): number {
+  return outbox.length;
+}
+
+/** Wipes the mirror and outbox, then re-fetches from the server. */
+export async function clearMirror(): Promise<void> {
+  mirror = emptyMirror();
+  outbox = [];
+  await persist();
+}
+
 // ---------------------------------------------------------------------------
 // Mirror writes (mutate mirror + queue the matching server op)
 // ---------------------------------------------------------------------------
