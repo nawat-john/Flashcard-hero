@@ -421,6 +421,179 @@ describe('clear()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// updateFolder — phase 7 color / icon fields
+// ---------------------------------------------------------------------------
+
+describe('updateFolder (color and icon)', () => {
+  it('sets color and icon', async () => {
+    await store.insertFolder(mkFolder());
+    await store.updateFolder('f1', { color: '#e74c3c', icon: '📁' });
+    const f = store.mFolder('f1')!;
+    expect(f.color).toBe('#e74c3c');
+    expect(f.icon).toBe('📁');
+  });
+
+  it('clears color and icon with null', async () => {
+    await store.insertFolder(mkFolder({ color: '#e74c3c', icon: '📁' }));
+    await store.updateFolder('f1', { color: null, icon: null });
+    const f = store.mFolder('f1')!;
+    expect(f.color).toBeNull();
+    expect(f.icon).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateDeck — phase 6+7 fields (tags, color, icon, labels, studyOrder)
+// ---------------------------------------------------------------------------
+
+describe('updateDeck (phase 6+7 fields)', () => {
+  it('updates tags', async () => {
+    await store.insertDeck(mkDeck());
+    await store.updateDeck('d1', { tags: ['english', 'vocab'] });
+    expect(store.mDeck('d1')?.tags).toEqual(['english', 'vocab']);
+  });
+
+  it('updates color and icon', async () => {
+    await store.insertDeck(mkDeck());
+    await store.updateDeck('d1', { color: '#3498db', icon: '🃏' });
+    const d = store.mDeck('d1')!;
+    expect(d.color).toBe('#3498db');
+    expect(d.icon).toBe('🃏');
+  });
+
+  it('clears color and icon with null', async () => {
+    await store.insertDeck(mkDeck({ color: '#3498db', icon: '🃏' }));
+    await store.updateDeck('d1', { color: null, icon: null });
+    const d = store.mDeck('d1')!;
+    expect(d.color).toBeNull();
+    expect(d.icon).toBeNull();
+  });
+
+  it('updates frontLabel and backLabel', async () => {
+    await store.insertDeck(mkDeck());
+    await store.updateDeck('d1', { frontLabel: 'Word', backLabel: 'Definition' });
+    const d = store.mDeck('d1')!;
+    expect(d.frontLabel).toBe('Word');
+    expect(d.backLabel).toBe('Definition');
+  });
+
+  it('updates studyOrder to random', async () => {
+    await store.insertDeck(mkDeck({ studyOrder: 'sequential' }));
+    await store.updateDeck('d1', { studyOrder: 'random' });
+    expect(store.mDeck('d1')?.studyOrder).toBe('random');
+  });
+
+  it('preserves unpatched fields', async () => {
+    await store.insertDeck(mkDeck({ title: 'Keep', tags: ['a'], studyOrder: 'random' }));
+    await store.updateDeck('d1', { color: '#fff' });
+    const d = store.mDeck('d1')!;
+    expect(d.title).toBe('Keep');
+    expect(d.tags).toEqual(['a']);
+    expect(d.studyOrder).toBe('random');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mAllFolders / mAllDecks
+// ---------------------------------------------------------------------------
+
+describe('mAllFolders', () => {
+  it('returns all folders sorted by name', async () => {
+    await store.insertFolder(mkFolder({ id: 'f3', name: 'Cherry', parentId: null }));
+    await store.insertFolder(mkFolder({ id: 'f1', name: 'Apple', parentId: null }));
+    await store.insertFolder(mkFolder({ id: 'f2', name: 'Banana', parentId: 'f1' }));
+
+    const names = store.mAllFolders().map((f) => f.name);
+    expect(names).toEqual(['Apple', 'Banana', 'Cherry']);
+  });
+});
+
+describe('mAllDecks', () => {
+  it('returns all decks sorted by createdAt descending', async () => {
+    await store.insertDeck(mkDeck({ id: 'd1', title: 'Old', createdAt: '2024-01-01T00:00:00Z' }));
+    await store.insertDeck(mkDeck({ id: 'd2', title: 'Mid', createdAt: '2024-06-01T00:00:00Z' }));
+    await store.insertDeck(mkDeck({ id: 'd3', title: 'New', createdAt: '2024-12-01T00:00:00Z' }));
+
+    const titles = store.mAllDecks().map((d) => d.title);
+    expect(titles).toEqual(['New', 'Mid', 'Old']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mTotal helpers and mPendingCount
+// ---------------------------------------------------------------------------
+
+describe('mTotalDecks / mTotalCards / mTotalReviews / mPendingCount', () => {
+  it('mTotalDecks counts decks in the mirror', async () => {
+    expect(store.mTotalDecks()).toBe(0);
+    await store.insertDeck(mkDeck({ id: 'd1' }));
+    await store.insertDeck(mkDeck({ id: 'd2' }));
+    expect(store.mTotalDecks()).toBe(2);
+  });
+
+  it('mTotalCards counts cards across all decks', async () => {
+    expect(store.mTotalCards()).toBe(0);
+    await store.insertCard(mkCard({ id: 'c1', deckId: 'd1' }));
+    await store.insertCard(mkCard({ id: 'c2', deckId: 'd2' }));
+    expect(store.mTotalCards()).toBe(2);
+  });
+
+  it('mTotalReviews counts distinct card reviews', async () => {
+    expect(store.mTotalReviews()).toBe(0);
+    await store.upsertReview(mkReview({ cardId: 'c1' }));
+    await store.upsertReview(mkReview({ cardId: 'c2' }));
+    expect(store.mTotalReviews()).toBe(2);
+  });
+
+  it('mTotalReviews counts 1 after upserting the same card twice', async () => {
+    await store.upsertReview(mkReview({ cardId: 'c1', interval: 1 }));
+    await store.upsertReview(mkReview({ cardId: 'c1', interval: 6 }));
+    expect(store.mTotalReviews()).toBe(1);
+  });
+
+  it('mPendingCount reflects queued outbox operations', async () => {
+    // Starting fresh: pending count should be 0 (store.clear wipes outbox).
+    expect(store.mPendingCount()).toBe(0);
+    // Each write queues an outbox op; since the supabase mock succeeds the ops
+    // flush immediately — so pending briefly goes up then back to 0.
+    await store.insertDeck(mkDeck());
+    // After a successful flush the outbox is drained.
+    expect(store.mPendingCount()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearMirror
+// ---------------------------------------------------------------------------
+
+describe('clearMirror()', () => {
+  it('wipes all mirror data', async () => {
+    await store.insertFolder(mkFolder({ id: 'f1' }));
+    await store.insertDeck(mkDeck({ id: 'd1' }));
+    await store.insertCard(mkCard({ id: 'c1' }));
+    await store.upsertReview(mkReview({ cardId: 'c1' }));
+
+    await store.clearMirror();
+
+    expect(store.mFolder('f1')).toBeUndefined();
+    expect(store.mDeck('d1')).toBeUndefined();
+    expect(store.mCard('c1')).toBeUndefined();
+    expect(store.mReview('c1')).toBeUndefined();
+    expect(store.mTotalDecks()).toBe(0);
+    expect(store.mTotalCards()).toBe(0);
+  });
+
+  it('does not sign out the user (userId is preserved)', async () => {
+    store.setUser('u1');
+    await store.clearMirror();
+    // getUserId falls back to auth.getSession only if userId is null;
+    // since clearMirror keeps userId, it returns 'u1' directly.
+    const id = await store.getUserId();
+    expect(id).toBe('u1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Online subscription
 // ---------------------------------------------------------------------------
 

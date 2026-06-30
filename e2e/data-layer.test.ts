@@ -17,10 +17,28 @@
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import * as store from '@/lib/store';
-import { createFolder, renameFolder, deleteFolder, listFolders } from '@/lib/folders';
-import { createDeck, updateDeck, deleteDeck, listDecks, listAllDecks, setDeckPublic, copyDeck } from '@/lib/decks';
-import { createCard, updateCard, deleteCard, listCards, reorderCards } from '@/lib/cards';
-import { recordReview, getDueCards } from '@/lib/reviews';
+import {
+  createFolder,
+  deleteFolder,
+  getFolder,
+  listFolders,
+  renameFolder,
+  shareFolder,
+  updateFolder,
+  copyFolder,
+} from '@/lib/folders';
+import {
+  copyDeck,
+  createDeck,
+  deleteDeck,
+  getDeck,
+  listAllDecks,
+  listDecks,
+  setDeckPublic,
+  updateDeck,
+} from '@/lib/decks';
+import { createCard, deleteCard, listCards, reorderCards, updateCard } from '@/lib/cards';
+import { getDueCards, recordReview } from '@/lib/reviews';
 
 // ---------------------------------------------------------------------------
 // Guard: skip all e2e tests if Supabase is not configured or credentials
@@ -288,6 +306,161 @@ describe_e2e('Data layer e2e', () => {
       expect(cards.some((c) => c.front === 'Public Q')).toBe(true);
       // But the card ids are different (true fork — not shared)
       expect(cards.find((c) => c.id === sourceCardId)).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  describe('Deck configuration (phase 6+7 fields)', () => {
+    let deckId: string;
+
+    beforeAll(async () => {
+      await switchUser(u1.email, u1.password);
+      deckId = await createDeck(null, `${E2E} Config Deck`, '');
+      cleanup.decks.push(deckId);
+    });
+
+    it('updates tags and reads them back via getDeck', async () => {
+      await updateDeck(deckId, { tags: ['spanish', 'vocab'] });
+      const deck = await getDeck(deckId);
+      expect(deck?.tags).toEqual(['spanish', 'vocab']);
+    });
+
+    it('updates color and icon and reads them back', async () => {
+      await updateDeck(deckId, { color: '#e74c3c', icon: '🃏' });
+      const deck = await getDeck(deckId);
+      expect(deck?.color).toBe('#e74c3c');
+      expect(deck?.icon).toBe('🃏');
+    });
+
+    it('updates frontLabel and backLabel', async () => {
+      await updateDeck(deckId, { frontLabel: 'Word', backLabel: 'Translation' });
+      const deck = await getDeck(deckId);
+      expect(deck?.frontLabel).toBe('Word');
+      expect(deck?.backLabel).toBe('Translation');
+    });
+
+    it('updates studyOrder to random', async () => {
+      await updateDeck(deckId, { studyOrder: 'random' });
+      const deck = await getDeck(deckId);
+      expect(deck?.studyOrder).toBe('random');
+    });
+
+    it('clears color / icon with null', async () => {
+      await updateDeck(deckId, { color: null, icon: null });
+      const deck = await getDeck(deckId);
+      expect(deck?.color).toBeNull();
+      expect(deck?.icon).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  describe('Folder configuration (phase 7 color / icon)', () => {
+    let folderId: string;
+
+    beforeAll(async () => {
+      await switchUser(u1.email, u1.password);
+      folderId = await createFolder(null, `${E2E} Config Folder`);
+      cleanup.folders.push(folderId);
+    });
+
+    it('updates color and icon and reads them back', async () => {
+      await updateFolder(folderId, { color: '#3498db', icon: '📁' });
+      const folder = await getFolder(folderId);
+      expect(folder?.color).toBe('#3498db');
+      expect(folder?.icon).toBe('📁');
+    });
+
+    it('clears color / icon with null', async () => {
+      await updateFolder(folderId, { color: null, icon: null });
+      const folder = await getFolder(folderId);
+      expect(folder?.color).toBeNull();
+      expect(folder?.icon).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  describe('Folder sharing and copy (phase 5)', () => {
+    let rootFolderId: string;
+    let childFolderId: string;
+    let deckInChildId: string;
+
+    beforeAll(async () => {
+      await switchUser(u1.email, u1.password);
+
+      // Build a small subtree: root → child → deck
+      rootFolderId = await createFolder(null, `${E2E} Share Root`);
+      cleanup.folders.push(rootFolderId);
+
+      childFolderId = await createFolder(rootFolderId, `${E2E} Share Child`);
+      cleanup.folders.push(childFolderId);
+
+      deckInChildId = await createDeck(childFolderId, `${E2E} Share Deck`, '');
+      cleanup.decks.push(deckInChildId);
+      await createCard(deckInChildId, 'Shared Q', 'Shared A');
+    });
+
+    it('shareFolder makes root and descendant decks public', async () => {
+      await shareFolder(rootFolderId, true);
+
+      // Root folder is public
+      const root = await getFolder(rootFolderId);
+      expect(root?.isPublic).toBe(true);
+
+      // Deck inside the child folder is also public
+      const decks = await listDecks(childFolderId);
+      const sharedDeck = decks.find((d) => d.id === deckInChildId);
+      expect(sharedDeck?.isPublic).toBe(true);
+    });
+
+    it('user2 can see the public root folder', async () => {
+      await switchUser(u2.email, u2.password);
+      const folders = await listFolders(null);
+      // User2's own root folders — the shared one won't be here (it's user1's)
+      // but we can fetch it directly since it's public.
+      const f = await getFolder(rootFolderId);
+      expect(f).not.toBeNull();
+      expect(f?.isPublic).toBe(true);
+    });
+
+    it('user2 can copy the public folder subtree (fork-on-copy)', async () => {
+      await switchUser(u2.email, u2.password);
+      const copyId = await copyFolder(rootFolderId, null);
+      expect(typeof copyId).toBe('string');
+
+      // The copy is user2's own folder, private
+      const copy = await getFolder(copyId);
+      expect(copy).not.toBeNull();
+      expect(copy?.isPublic).toBe(false);
+
+      // Child folders were copied
+      const children = await listFolders(copyId);
+      expect(children.length).toBeGreaterThanOrEqual(1);
+
+      // Deck inside the child was copied with the right card content
+      const copyChild = children[0];
+      const copyDecks = await listDecks(copyChild.id);
+      expect(copyDecks.length).toBeGreaterThanOrEqual(1);
+      const cards = await listCards(copyDecks[0].id);
+      expect(cards.some((c) => c.front === 'Shared Q')).toBe(true);
+      // Cards have new IDs — not linked to originals
+      const origCards = await listCards(deckInChildId);
+      const origCardIds = new Set(origCards.map((c) => c.id));
+      expect(cards.some((c) => origCardIds.has(c.id))).toBe(false);
+
+      // Clean up user2's copy
+      await deleteFolder(copyId).catch(() => {});
+    });
+
+    it('shareFolder with false unpublishes the subtree', async () => {
+      await switchUser(u1.email, u1.password);
+      await shareFolder(rootFolderId, false);
+
+      const root = await getFolder(rootFolderId);
+      expect(root?.isPublic).toBe(false);
+
+      const decks = await listDecks(childFolderId);
+      const sharedDeck = decks.find((d) => d.id === deckInChildId);
+      expect(sharedDeck?.isPublic).toBe(false);
     });
   });
 
